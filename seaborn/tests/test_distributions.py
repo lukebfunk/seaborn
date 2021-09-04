@@ -14,7 +14,7 @@ from ..palettes import (
     color_palette,
     light_palette,
 )
-from .._core import (
+from .._oldcore import (
     categorical_order,
 )
 from .._statistics import (
