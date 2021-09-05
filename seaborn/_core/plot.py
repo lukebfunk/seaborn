@@ -70,6 +70,9 @@ class Plot:
         # Other options would be:
         # - None as the value for type
         # - some sort of uninitialized singleton for the object,
+        # Might we want to defer the default scale to the mark in some cases?
+        # (i.e. like the current concept of "categorical" plots)
+        # If so, a default value that communicates "unset" seems better than "unknown"
         self._scales = {
             "x": ScaleWrapper(mpl.scale.LinearScale("x"), "unknown"),
             "y": ScaleWrapper(mpl.scale.LinearScale("y"), "unknown"),

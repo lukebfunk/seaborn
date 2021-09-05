@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from .base import Mark
+from seaborn._marks.base import Mark
 
 
 class Point(Mark):
