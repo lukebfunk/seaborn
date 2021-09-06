@@ -4,7 +4,7 @@ from seaborn._marks.base import Mark
 
 
 class Point(Mark):
-
+    # TODO this is mostly a prototype for testing
     supports = ["hue"]
 
     def __init__(self, jitter=None, **kwargs):
