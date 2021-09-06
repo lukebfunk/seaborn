@@ -212,12 +212,12 @@ class TestLayerAddition:
     def test_orient(self, arg, expected):
 
         class MockMarkTrackOrient(MockMark):
-            def _adjust(self, data):
+            def _adjust(self, data, *args, **kwargs):
                 self.orient_at_adjust = self.orient
                 return data
 
         class MockStatTrackOrient(MockStat):
-            def setup(self, data):
+            def setup(self, data, *args, **kwargs):
                 super().setup(data)
                 self.orient_at_setup = self.orient
                 return self
@@ -579,7 +579,7 @@ class TestPlotting:
         orig_df = long_df.copy(deep=True)
 
         class AdjustableMockMark(MockMark):
-            def _adjust(self, data):
+            def _adjust(self, data, *args, **kwargs):
                 data["x"] = data["x"] + 1
                 return data
 
@@ -593,7 +593,7 @@ class TestPlotting:
     def test_adjustments_log_scale(self, long_df):
 
         class AdjustableMockMark(MockMark):
-            def _adjust(self, data):
+            def _adjust(self, data, *args, **kwargs):
                 data["x"] = data["x"] - 1
                 return data
 

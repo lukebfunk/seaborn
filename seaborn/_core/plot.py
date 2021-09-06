@@ -131,10 +131,11 @@ class Plot:
             # stat with non-default params, it should use functools.partial
             stat = mark.default_stat()
 
+        orient_norm: Literal["x", "y"] | None
         orient_map = {"v": "x", "h": "y"}
-        orient = orient_map.get(orient, orient)  # type: ignore  # mypy false positive?
+        orient_norm = orient_map.get(orient, orient)  # type: ignore
 
-        self._layers.append(Layer(mark, stat, orient, data, variables))
+        self._layers.append(Layer(mark, stat, orient_norm, data, variables))
 
         return self
 
@@ -722,8 +723,9 @@ class Plot:
     def _generate_pairings(
         self,
         df: DataFrame
-    ) -> Generator[tuple[list[dict], DataFrame], None, None]:
+    ) -> Generator[tuple[list[dict], DataFrame, dict[str, ScaleWrapper]], None, None]:
         # TODO retype return with SubplotSpec or similar
+        # TODO also maybe abstract the whole thing somewhere, it's way too verbose
 
         pair_variables = self._pairspec.get("structure", {})
 
@@ -756,7 +758,11 @@ class Plot:
                         for col in df if col.startswith(prefix)
                     })
 
-            scales = {"x": self._scales[x], "y": self._scales[y]}
+            scales = {
+                axis: self._scales[var]
+                for axis, var in zip("xy", [x, y])
+                if var in self._scales
+            }
 
             yield subplots, df.assign(**reassignments), scales
 
