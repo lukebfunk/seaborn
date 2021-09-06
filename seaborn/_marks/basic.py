@@ -12,7 +12,7 @@ class Point(Mark):
         super().__init__(**kwargs)
         self.jitter = jitter  # TODO decide on form of jitter and add type hinting
 
-    def _adjust(self, df):
+    def _adjust(self, df, mappings):
 
         if self.jitter is None:
             return df
@@ -49,6 +49,7 @@ class Point(Mark):
             c = None
 
         # TODO Not backcompat with allowed (but nonfunctional) univariate plots
+        # TODO The approach used in scatterplot (modify artist after plotting) is better
         ax.scatter(x=data["x"], y=data["y"], c=c, **kws)
 
 
