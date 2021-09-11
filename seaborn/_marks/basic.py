@@ -5,7 +5,7 @@ from .base import Mark
 
 class Point(Mark):
 
-    supports = ["hue"]
+    supports = ["color"]
 
     def __init__(self, jitter=None, **kwargs):
 
@@ -41,11 +41,11 @@ class Point(Mark):
 
         # TODO since names match, can probably be automated!
         # TODO note that newer style is to modify the artists
-        if "hue" in data:
-            c = mappings["hue"](data["hue"])
+        if "color" in data:
+            c = mappings["color"](data["color"])
         else:
             # TODO prevents passing in c. But do we want to permit that?
-            # I think if we implement map_hue("identity"), then no
+            # I think if we implement map_color("identity"), then no
             c = None
 
         # TODO Not backcompat with allowed (but nonfunctional) univariate plots
@@ -58,26 +58,27 @@ class Line(Mark):
     # i.e. Line needs to aggregate by x, but not plot by it
     # also how will this get parametrized to support orient=?
     # TODO will this sort by the orient dimension like lineplot currently does?
-    grouping_vars = ["hue", "size", "style"]
-    supports = ["hue"]
+    grouping_vars = ["color", "size", "style"]
+    supports = ["color"]
 
     def _plot_split(self, keys, data, ax, mappings, kws):
 
-        if "hue" in keys:
-            kws["color"] = mappings["hue"](keys["hue"])
+        if "color" in keys:
+            kws["color"] = mappings["color"](keys["color"])
 
         ax.plot(data["x"], data["y"], **kws)
 
 
 class Area(Mark):
 
-    grouping_vars = ["hue"]
-    supports = ["hue"]
+    grouping_vars = ["color"]
+    supports = ["color"]
 
     def _plot_split(self, keys, data, ax, mappings, kws):
 
-        if "hue" in keys:
-            kws["facecolor"] = mappings["hue"](keys["hue"])
+        if "color" in keys:
+            # TODO as we need the kwarg to be facecolor, that should be the mappable?
+            kws["facecolor"] = mappings["color"](keys["color"])
 
         # TODO how will orient work here?
         # Currently this requires you to specify both orient and use y, xmin, xmin

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt  # TODO defer import into Plot.show()
 from seaborn._core.rules import categorical_order, variable_type
 from seaborn._core.data import PlotData
 from seaborn._core.subplots import Subplots
-from seaborn._core.mappings import GroupMapping, HueMapping
+from seaborn._core.mappings import GroupMapping, ColorMapping
 from seaborn._core.scales import (
     ScaleWrapper,
     CategoricalScale,
@@ -63,7 +63,7 @@ class Plot:
         # empty and define the defaults elsewhere
         self._mappings = {
             "group": GroupMapping(),
-            "hue": HueMapping(),
+            "color": ColorMapping(),
         }
 
         # TODO is using "unknown" here the best approach?
@@ -219,6 +219,7 @@ class Plot:
 
     def facet(
         self,
+        # TODO require kwargs?
         col: VariableSpec = None,
         row: VariableSpec = None,
         col_order: OrderSpec = None,  # TODO single order param
@@ -249,15 +250,17 @@ class Plot:
 
         return self
 
-    def map_hue(
+    def map_color(
         self,
         palette: PaletteSpec = None,
     ) -> Plot:
 
         # TODO we do some fancy business currently to avoid having to
         # write these ... do we want that to persist or is it too confusing?
+        # If we do ... maybe we don't even need to write these methods, but can
+        # instead programatically add them based on central dict of mapping objects.
         # ALSO TODO should these be initialized with defaults?
-        self._mappings["hue"] = HueMapping(palette)
+        self._mappings["color"] = ColorMapping(palette)
         return self
 
     # TODO originally we had planned to have a scale_native option that would default

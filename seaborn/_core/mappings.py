@@ -49,7 +49,7 @@ class SemanticMapping:
 # Against:
 # Our current external interface consumes both mapping parameterization like the
 # color palette to use and the order information. I think this makes a fair amount
-# of sense. But we could also break those, e.g. have `scale_fixed("hue", order=...)`
+# of sense. But we could also break those, e.g. have `scale_fixed("color", order=...)`
 # similar to what we are currently developing for the x/y. Is is another method call
 # which may be annoying. But then alternately it is maybe more consistent (and would
 # consistently hook into whatever internal representation we'll use for variable order).
@@ -65,7 +65,7 @@ class GroupMapping(SemanticMapping):
         return self
 
 
-class HueMapping(SemanticMapping):
+class ColorMapping(SemanticMapping):
     """Mapping that sets artist colors according to data values."""
 
     # TODO type the important class attributes here
@@ -78,7 +78,7 @@ class HueMapping(SemanticMapping):
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
-    ) -> HueMapping:
+    ) -> ColorMapping:
         """Infer the type of mapping to use and define it using this vector of data."""
         palette: PaletteSpec = self._input_palette
         cmap: Colormap | None = None
@@ -161,7 +161,7 @@ class HueMapping(SemanticMapping):
         palette: PaletteSpec,
         order: list | None,
     ) -> tuple[list, dict]:
-        """Determine colors when the hue mapping is categorical."""
+        """Determine colors when the mapping is categorical."""
         # -- Identify the order and name of the levels
 
         levels = categorical_order(data, order)
@@ -203,14 +203,15 @@ class HueMapping(SemanticMapping):
         palette: PaletteSpec,
         norm: Normalize | None,
     ) -> tuple[list, dict, Normalize | None, Colormap]:
-        """Determine colors when the hue variable is quantitative."""
+        """Determine colors when the variable is quantitative."""
         cmap: Colormap
         if isinstance(palette, dict):
 
-            # The presence of a norm object overrides a dictionary of hues
-            # in specifying a numeric mapping, so we need to process it here.
+            # In the function interface, the presence of a norm object overrides
+            # a dictionary of colors to specify a numeric mapping, so we need
+            # to process it here.
             # TODO this functionality only exists to support the old relplot
-            # hack for linking hue orders across facets. We don't need that any
+            # hack for linking hue orders across facets.  We don't need that any
             # more and should probably remove this, but needs deprecation.
             # (Also what should new behavior be? I think an error probably).
             levels = list(sorted(palette))
@@ -241,7 +242,7 @@ class HueMapping(SemanticMapping):
             elif isinstance(norm, tuple):
                 norm = mpl.colors.Normalize(*norm)
             elif not isinstance(norm, mpl.colors.Normalize):
-                err = "`hue_norm` must be None, tuple, or Normalize object."
+                err = "`norm` must be None, tuple, or Normalize object."
                 raise ValueError(err)
             norm.autoscale_None(data.dropna())
 
