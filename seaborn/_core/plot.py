@@ -61,9 +61,12 @@ class Plot:
 
         # TODO see notes in _setup_mappings I think we're going to start with this
         # empty and define the defaults elsewhere
+        # TODO related to automatic definition of mapping methods FIXME:mapping
         self._mappings = {
             "group": GroupMapping(),
             "color": ColorMapping(),
+            "facecolor": ColorMapping(),
+            "edgecolor": ColorMapping(),
         }
 
         # TODO is using "unknown" here the best approach?
@@ -252,6 +255,7 @@ class Plot:
 
     def map_color(
         self,
+        # TODO accept variable specification here?
         palette: PaletteSpec = None,
     ) -> Plot:
 
@@ -261,6 +265,22 @@ class Plot:
         # instead programatically add them based on central dict of mapping objects.
         # ALSO TODO should these be initialized with defaults?
         self._mappings["color"] = ColorMapping(palette)
+        return self
+
+    def map_facecolor(
+        self,
+        palette: PaletteSpec = None,
+    ) -> Plot:
+
+        self._mappings["facecolor"] = ColorMapping(palette)
+        return self
+
+    def map_edgecolor(
+        self,
+        palette: PaletteSpec = None,
+    ) -> Plot:
+
+        self._mappings["edgecolor"] = ColorMapping(palette)
         return self
 
     # TODO originally we had planned to have a scale_native option that would default

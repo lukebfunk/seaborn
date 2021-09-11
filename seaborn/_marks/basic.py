@@ -40,7 +40,6 @@ class Point(Mark):
     def _plot_split(self, keys, data, ax, mappings, kws):
 
         # TODO since names match, can probably be automated!
-        # TODO note that newer style is to modify the artists
         if "color" in data:
             c = mappings["color"](data["color"])
         else:
@@ -49,7 +48,20 @@ class Point(Mark):
             c = None
 
         # TODO Not backcompat with allowed (but nonfunctional) univariate plots
-        ax.scatter(x=data["x"], y=data["y"], c=c, **kws)
+        points = ax.scatter(x=data["x"], y=data["y"], c=c, **kws)
+
+        # TODO what to do about color= for marks that use facecolor and edgecolor?
+        # a) defer to matplotlib?
+        # b) implement matplotlib's (or matplotlib-like) rules in seaborn?
+        # c) make color= set both face and edge color?
+        # d) don't support color in those marks
+        for var in ["facecolor", "edgecolor"]:
+            if var in data:
+                func = getattr(points, f"set_{var}")
+                func(mappings[var](data[var]))
+
+        # TODO note that when scaling this up we'll need to catch the artist
+        # and update its attributes (like in scatterplot) to allow marker variation
 
 
 class Line(Mark):
