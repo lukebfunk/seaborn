@@ -28,14 +28,13 @@ class SemanticMapping:
 
     def __call__(self, x):  # TODO types; will need to overload (wheee)
         # TODO this is a hack to get things working
-        # We are missing numeric maps and lots of other things
         if isinstance(x, pd.Series):
             if x.dtype.name == "category":  # TODO! possible pandas bug
                 x = x.astype(object)
             # TODO where is best place to ensure that LUT values are rgba tuples?
-            return np.stack(x.map(self.lookup_table).map(to_rgb))
+            return np.stack(x.map(self.lookup_table))
         else:
-            return to_rgb(self.lookup_table[x])
+            return self.lookup_table[x]
 
 
 # TODO Currently, the SemanticMapping objects are also the source of the information
@@ -73,6 +72,17 @@ class ColorMapping(SemanticMapping):
     def __init__(self, palette: PaletteSpec = None):
 
         self._input_palette = palette
+
+    def __call__(self, x):  # TODO types; will need to overload (wheee)
+        # TODO this is a hack to get things working
+        # We are missing numeric maps and lots of other things
+        if isinstance(x, pd.Series):
+            if x.dtype.name == "category":  # TODO! possible pandas bug
+                x = x.astype(object)
+            # TODO where is best place to ensure that LUT values are rgba tuples?
+            return np.stack(x.map(self.lookup_table).map(to_rgb))
+        else:
+            return to_rgb(self.lookup_table[x])
 
     def setup(
         self,
@@ -249,3 +259,38 @@ class ColorMapping(SemanticMapping):
             lookup_table = dict(zip(levels, cmap(norm(levels))))
 
         return levels, lookup_table, norm, cmap
+
+
+class MarkerMapping(SemanticMapping):
+
+    def __init__(self, shapes: list | dict | None = None):  # TODO full types
+
+        # TODO fill or filled parameter?
+        # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
+        # allow full matplotlib fillstyle API?
+
+        self._input_shapes = shapes
+
+    def setup(
+        self,
+        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
+        scale: Scale | None = None,  # TODO or always have a Scale?
+    ) -> MarkerMapping:
+
+        shapes = self._input_shapes
+        order = None if scale is None else scale.order
+        levels = categorical_order(data, order)
+
+        # TODO input checking; generalize across mappings
+
+        # TODO default shapes
+
+        if isinstance(shapes, dict):
+            shapes = {k: mpl.markers.MarkerStyle(s) for k, s in shapes.items()}
+        elif isinstance(shapes, list):
+            shapes = {k: mpl.markers.MarkerStyle(s) for k, s in zip(levels, shapes)}
+
+        self.levels = levels
+        self.lookup_table = shapes
+
+        return self

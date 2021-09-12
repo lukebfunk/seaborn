@@ -61,6 +61,11 @@ class Point(Mark):
                 func = getattr(points, f"set_{var}")
                 func(mappings[var](data[var]))
 
+        if "marker" in data:
+            markers = mappings["marker"](data["marker"])
+            paths = [m.get_path().transformed(m.get_transform()) for m in markers]
+            points.set_paths(paths)
+
         # TODO note that when scaling this up we'll need to catch the artist
         # and update its attributes (like in scatterplot) to allow marker variation
 
