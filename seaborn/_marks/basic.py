@@ -55,6 +55,7 @@ class Point(Mark):
         # b) implement matplotlib's (or matplotlib-like) rules in seaborn?
         # c) make color= set both face and edge color?
         # d) don't support color in those marks
+        # e) not have a facecolor semantic, always use color
         for var in ["facecolor", "edgecolor"]:
             if var in data:
                 func = getattr(points, f"set_{var}")

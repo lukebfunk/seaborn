@@ -10,7 +10,7 @@ from numpy.testing import assert_array_equal
 from seaborn.palettes import color_palette
 from seaborn._core.rules import categorical_order
 from seaborn._core.scales import ScaleWrapper, CategoricalScale
-from seaborn._core.mappings import GroupMapping, HueMapping
+from seaborn._core.mappings import GroupMapping, ColorMapping
 
 
 class TestGroupMapping:
@@ -22,7 +22,7 @@ class TestGroupMapping:
         assert m.levels == categorical_order(x)
 
 
-class TestHueMapping:
+class TestColorMapping:
 
     @pytest.fixture
     def num_vector(self, long_df):
@@ -49,7 +49,7 @@ class TestHueMapping:
     def test_categorical_default_palette(self, cat_vector, cat_order):
 
         expected_lookup_table = dict(zip(cat_order, color_palette()))
-        m = HueMapping().setup(cat_vector)
+        m = ColorMapping().setup(cat_vector)
 
         for level, color in expected_lookup_table.items():
             assert m(level) == color
@@ -59,7 +59,7 @@ class TestHueMapping:
         vector = pd.Series(list("abcdefghijklmnopqrstuvwxyz"))
         n_colors = len(vector)
         expected_lookup_table = dict(zip(vector, color_palette("husl", n_colors)))
-        m = HueMapping().setup(vector)
+        m = ColorMapping().setup(vector)
 
         for level, color in expected_lookup_table.items():
             assert m(level) == color
@@ -67,7 +67,7 @@ class TestHueMapping:
     def test_categorical_named_palette(self, cat_vector, cat_order):
 
         palette = "Blues"
-        m = HueMapping(palette=palette).setup(cat_vector)
+        m = ColorMapping(palette=palette).setup(cat_vector)
         assert m.palette == palette
         assert m.levels == cat_order
 
@@ -81,7 +81,7 @@ class TestHueMapping:
     def test_categorical_list_palette(self, cat_vector, cat_order):
 
         palette = color_palette("Reds", len(cat_order))
-        m = HueMapping(palette=palette).setup(cat_vector)
+        m = ColorMapping(palette=palette).setup(cat_vector)
         assert m.palette == palette
 
         expected_lookup_table = dict(zip(cat_order, palette))
@@ -92,7 +92,7 @@ class TestHueMapping:
     def test_categorical_implied_by_list_palette(self, num_vector, num_order):
 
         palette = color_palette("Reds", len(num_order))
-        m = HueMapping(palette=palette).setup(num_vector)
+        m = ColorMapping(palette=palette).setup(num_vector)
         assert m.palette == palette
 
         expected_lookup_table = dict(zip(num_order, palette))
@@ -103,7 +103,7 @@ class TestHueMapping:
     def test_categorical_dict_palette(self, cat_vector, cat_order):
 
         palette = dict(zip(cat_order, color_palette("Greens")))
-        m = HueMapping(palette=palette).setup(cat_vector)
+        m = ColorMapping(palette=palette).setup(cat_vector)
         assert m.palette == palette
 
         for level, color in palette.items():
@@ -112,7 +112,7 @@ class TestHueMapping:
     def test_categorical_implied_by_dict_palette(self, num_vector, num_order):
 
         palette = dict(zip(num_order, color_palette("Greens")))
-        m = HueMapping(palette=palette).setup(num_vector)
+        m = ColorMapping(palette=palette).setup(num_vector)
         assert m.palette == palette
 
         for level, color in palette.items():
@@ -122,13 +122,13 @@ class TestHueMapping:
 
         palette = dict(zip(cat_order[1:], color_palette("Purples")))
         with pytest.raises(ValueError):
-            HueMapping(palette=palette).setup(cat_vector)
+            ColorMapping(palette=palette).setup(cat_vector)
 
     def test_categorical_list_with_wrong_length(self, cat_vector, cat_order):
 
         palette = color_palette("Oranges", len(cat_order) - 1)
         with pytest.raises(ValueError):
-            HueMapping(palette=palette).setup(cat_vector)
+            ColorMapping(palette=palette).setup(cat_vector)
 
     def test_categorical_with_ordered_scale(self, cat_vector):
 
@@ -138,7 +138,7 @@ class TestHueMapping:
         palette = "deep"
         colors = color_palette(palette, len(cat_order))
 
-        m = HueMapping(palette=palette).setup(cat_vector, scale)
+        m = ColorMapping(palette=palette).setup(cat_vector, scale)
         assert m.levels == cat_order
 
         expected_lookup_table = dict(zip(cat_order, colors))
@@ -153,7 +153,7 @@ class TestHueMapping:
         palette = "deep"
         colors = color_palette(palette, len(num_order))
 
-        m = HueMapping(palette=palette).setup(num_vector, scale)
+        m = ColorMapping(palette=palette).setup(num_vector, scale)
         assert m.levels == num_order
 
         expected_lookup_table = dict(zip(num_order, colors))
@@ -173,7 +173,7 @@ class TestHueMapping:
         palette = "deep"
         colors = color_palette(palette, len(order))
 
-        m = HueMapping(palette=palette).setup(num_vector, scale)
+        m = ColorMapping(palette=palette).setup(num_vector, scale)
         assert m.levels == order
 
         expected_lookup_table = dict(zip(order, colors))
@@ -188,7 +188,7 @@ class TestHueMapping:
 
         expected_lookup_table = dict(zip(new_order, color_palette()))
 
-        m = HueMapping().setup(new_vector)
+        m = ColorMapping().setup(new_vector)
 
         for level, color in expected_lookup_table.items():
             assert m(level) == color
@@ -200,7 +200,7 @@ class TestHueMapping:
 
         expected_lookup_table = dict(zip(new_order, color_palette()))
 
-        m = HueMapping().setup(new_vector)
+        m = ColorMapping().setup(new_vector)
 
         for level, color in expected_lookup_table.items():
             assert m(level) == color
@@ -209,7 +209,7 @@ class TestHueMapping:
 
         palette = "bright"
         expected_lookup_table = dict(zip(num_order, color_palette(palette)))
-        m = HueMapping(palette=palette).setup(num_vector)
+        m = ColorMapping(palette=palette).setup(num_vector)
         for level, color in expected_lookup_table.items():
             assert m(level) == color
 
@@ -217,7 +217,7 @@ class TestHueMapping:
 
         vector = pd.Series([1, 0, 0, 0, 1, 1, 1])
         expected_palette = dict(zip([0, 1], color_palette()))
-        m = HueMapping().setup(vector)
+        m = ColorMapping().setup(vector)
 
         for level, color in expected_palette.items():
             assert m(level) == color
@@ -225,26 +225,26 @@ class TestHueMapping:
         first_color, *_ = color_palette()
 
         for val in [0, 1]:
-            m = HueMapping().setup(pd.Series([val] * 4))
+            m = ColorMapping().setup(pd.Series([val] * 4))
             assert m(val) == first_color
 
     def test_categorical_multi_lookup(self):
 
         x = pd.Series(["a", "b", "c"])
         colors = color_palette(n_colors=len(x))
-        m = HueMapping().setup(x)
+        m = ColorMapping().setup(x)
         assert_array_equal(m(x), np.stack(colors))
 
     def test_categorical_multi_lookup_categorical(self):
 
         x = pd.Series(["a", "b", "c"]).astype("category")
         colors = color_palette(n_colors=len(x))
-        m = HueMapping().setup(x)
+        m = ColorMapping().setup(x)
         assert_array_equal(m(x), np.stack(colors))
 
     def test_numeric_default_palette(self, num_vector, num_order, num_norm):
 
-        m = HueMapping().setup(num_vector)
+        m = ColorMapping().setup(num_vector)
         expected_cmap = color_palette("ch:", as_cmap=True)
         for level in num_order:
             assert m(level) == to_rgb(expected_cmap(num_norm(level)))
@@ -252,7 +252,7 @@ class TestHueMapping:
     def test_numeric_named_palette(self, num_vector, num_order, num_norm):
 
         palette = "viridis"
-        m = HueMapping(palette=palette).setup(num_vector)
+        m = ColorMapping(palette=palette).setup(num_vector)
         expected_cmap = color_palette(palette, as_cmap=True)
         for level in num_order:
             assert m(level) == to_rgb(expected_cmap(num_norm(level)))
@@ -260,7 +260,7 @@ class TestHueMapping:
     def test_numeric_colormap_palette(self, num_vector, num_order, num_norm):
 
         cmap = color_palette("rocket", as_cmap=True)
-        m = HueMapping(palette=cmap).setup(num_vector)
+        m = ColorMapping(palette=cmap).setup(num_vector)
         for level in num_order:
             assert m(level) == to_rgb(cmap(num_norm(level)))
 
@@ -268,9 +268,9 @@ class TestHueMapping:
 
         lims = (num_vector.min() - 1, num_vector.quantile(.5))
         cmap = color_palette("rocket", as_cmap=True)
-        scale = ScaleWrapper(LinearScale("hue"), "numeric", norm=lims)
+        scale = ScaleWrapper(LinearScale("color"), "numeric", norm=lims)
         norm = Normalize(*lims)
-        m = HueMapping(palette=cmap).setup(num_vector, scale)
+        m = ColorMapping(palette=cmap).setup(num_vector, scale)
         for level in num_order:
             assert m(level) == to_rgb(cmap(norm(level)))
 
@@ -279,34 +279,34 @@ class TestHueMapping:
         lims = (num_vector.min() - 1, num_vector.quantile(.5))
         norm = Normalize(*lims)
         cmap = color_palette("rocket", as_cmap=True)
-        scale = ScaleWrapper(LinearScale("hue"), "numeric", norm=norm)
-        m = HueMapping(palette=cmap).setup(num_vector, scale)
+        scale = ScaleWrapper(LinearScale("color"), "numeric", norm=norm)
+        m = ColorMapping(palette=cmap).setup(num_vector, scale)
         for level in num_order:
             assert m(level) == to_rgb(cmap(norm(level)))
 
     def test_numeric_dict_palette_with_norm(self, num_vector, num_order, num_norm):
 
         palette = dict(zip(num_order, color_palette()))
-        scale = ScaleWrapper(LinearScale("hue"), "numeric", norm=num_norm)
-        m = HueMapping(palette=palette).setup(num_vector, scale)
+        scale = ScaleWrapper(LinearScale("color"), "numeric", norm=num_norm)
+        m = ColorMapping(palette=palette).setup(num_vector, scale)
         for level, color in palette.items():
             assert m(level) == to_rgb(color)
 
     def test_numeric_multi_lookup(self, num_vector, num_norm):
 
         cmap = color_palette("mako", as_cmap=True)
-        m = HueMapping(palette=cmap).setup(num_vector)
+        m = ColorMapping(palette=cmap).setup(num_vector)
         expected_colors = cmap(num_norm(num_vector.to_numpy()))[:, :3]
         assert_array_equal(m(num_vector), expected_colors)
 
     def test_bad_palette(self, num_vector):
 
         with pytest.raises(ValueError):
-            HueMapping(palette="not_a_palette").setup(num_vector)
+            ColorMapping(palette="not_a_palette").setup(num_vector)
 
     def test_bad_norm(self, num_vector):
 
         norm = "not_a_norm"
-        scale = ScaleWrapper(LinearScale("hue"), "numeric", norm=norm)
+        scale = ScaleWrapper(LinearScale("color"), "numeric", norm=norm)
         with pytest.raises(ValueError):
-            HueMapping().setup(num_vector, scale)
+            ColorMapping().setup(num_vector, scale)

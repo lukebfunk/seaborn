@@ -283,6 +283,10 @@ class Plot:
         self._mappings["edgecolor"] = ColorMapping(palette)
         return self
 
+    # TODO have map_gradient?
+    # This could be used to add another color-like dimension
+    # and also the basis for what mappings like stat.density -> rgba do
+
     # TODO originally we had planned to have a scale_native option that would default
     # to matplotlib. I don't fully remember why. Is this still something we need?
 

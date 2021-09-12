@@ -42,7 +42,7 @@ class MockMark(Mark):
 
     # TODO we need to sort out the stat application, it is broken right now
     # default_stat = MockStat
-    grouping_vars = ["hue"]
+    grouping_vars = ["color"]
 
     def __init__(self, *args, **kwargs):
 
@@ -392,7 +392,7 @@ class TestPlotting:
 
     def test_single_split_multi_layer(self, long_df):
 
-        vs = [{"hue": "a", "size": "z"}, {"hue": "b", "style": "c"}]
+        vs = [{"color": "a", "width": "z"}, {"color": "b", "pattern": "c"}]
 
         class NoGroupingMark(MockMark):
             grouping_vars = []
@@ -436,7 +436,7 @@ class TestPlotting:
 
     @pytest.mark.parametrize(
         "split_var", [
-            "hue",  # explicitly declared on the Mark
+            "color",  # explicitly declared on the Mark
             "group",  # implicitly used for all Mark classes
         ])
     def test_one_grouping_variable(self, long_df, split_var):
@@ -453,7 +453,7 @@ class TestPlotting:
 
     def test_two_grouping_variables(self, long_df):
 
-        split_vars = ["hue", "group"]
+        split_vars = ["color", "group"]
         split_cols = ["a", "b"]
         variables = {var: col for var, col in zip(split_vars, split_cols)}
 
@@ -1013,7 +1013,7 @@ class TestPairInterface:
         assert all_cols.difference(p2._pairspec["x"]).item() == "y"
         assert "y" not in p2._pairspec
 
-        p3 = Plot(long_df, hue="a").pair()
+        p3 = Plot(long_df, color="a").pair()
         for axis in "xy":
             assert all_cols.difference(p3._pairspec[axis]).item() == "a"
 
