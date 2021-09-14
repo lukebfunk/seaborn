@@ -48,20 +48,20 @@ class TestColorMapping:
 
     def test_categorical_default_palette(self, cat_vector, cat_order):
 
-        expected_lookup_table = dict(zip(cat_order, color_palette()))
+        expected = dict(zip(cat_order, color_palette()))
         m = ColorMapping().setup(cat_vector)
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_default_palette_large(self):
 
         vector = pd.Series(list("abcdefghijklmnopqrstuvwxyz"))
         n_colors = len(vector)
-        expected_lookup_table = dict(zip(vector, color_palette("husl", n_colors)))
+        expected = dict(zip(vector, color_palette("husl", n_colors)))
         m = ColorMapping().setup(vector)
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_named_palette(self, cat_vector, cat_order):
@@ -71,11 +71,11 @@ class TestColorMapping:
         assert m.palette == palette
         assert m.levels == cat_order
 
-        expected_lookup_table = dict(
+        expected = dict(
             zip(cat_order, color_palette(palette, len(cat_order)))
         )
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_list_palette(self, cat_vector, cat_order):
@@ -84,9 +84,9 @@ class TestColorMapping:
         m = ColorMapping(palette=palette).setup(cat_vector)
         assert m.palette == palette
 
-        expected_lookup_table = dict(zip(cat_order, palette))
+        expected = dict(zip(cat_order, palette))
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_implied_by_list_palette(self, num_vector, num_order):
@@ -95,9 +95,9 @@ class TestColorMapping:
         m = ColorMapping(palette=palette).setup(num_vector)
         assert m.palette == palette
 
-        expected_lookup_table = dict(zip(num_order, palette))
+        expected = dict(zip(num_order, palette))
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_dict_palette(self, cat_vector, cat_order):
@@ -141,9 +141,9 @@ class TestColorMapping:
         m = ColorMapping(palette=palette).setup(cat_vector, scale)
         assert m.levels == cat_order
 
-        expected_lookup_table = dict(zip(cat_order, colors))
+        expected = dict(zip(cat_order, colors))
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_implied_by_scale(self, num_vector, num_order):
@@ -156,9 +156,9 @@ class TestColorMapping:
         m = ColorMapping(palette=palette).setup(num_vector, scale)
         assert m.levels == num_order
 
-        expected_lookup_table = dict(zip(num_order, colors))
+        expected = dict(zip(num_order, colors))
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_implied_by_ordered_scale(self, num_vector):
@@ -176,9 +176,9 @@ class TestColorMapping:
         m = ColorMapping(palette=palette).setup(num_vector, scale)
         assert m.levels == order
 
-        expected_lookup_table = dict(zip(order, colors))
+        expected = dict(zip(order, colors))
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_with_ordered_categories(self, cat_vector, cat_order):
@@ -186,11 +186,11 @@ class TestColorMapping:
         new_order = list(reversed(cat_order))
         new_vector = cat_vector.astype("category").cat.set_categories(new_order)
 
-        expected_lookup_table = dict(zip(new_order, color_palette()))
+        expected = dict(zip(new_order, color_palette()))
 
         m = ColorMapping().setup(new_vector)
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_implied_by_categories(self, num_vector):
@@ -198,19 +198,19 @@ class TestColorMapping:
         new_vector = num_vector.astype("category")
         new_order = categorical_order(new_vector)
 
-        expected_lookup_table = dict(zip(new_order, color_palette()))
+        expected = dict(zip(new_order, color_palette()))
 
         m = ColorMapping().setup(new_vector)
 
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_implied_by_palette(self, num_vector, num_order):
 
         palette = "bright"
-        expected_lookup_table = dict(zip(num_order, color_palette(palette)))
+        expected = dict(zip(num_order, color_palette(palette)))
         m = ColorMapping(palette=palette).setup(num_vector)
-        for level, color in expected_lookup_table.items():
+        for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_from_binary_data(self):

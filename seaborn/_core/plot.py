@@ -13,7 +13,12 @@ import matplotlib.pyplot as plt  # TODO defer import into Plot.show()
 from seaborn._core.rules import categorical_order, variable_type
 from seaborn._core.data import PlotData
 from seaborn._core.subplots import Subplots
-from seaborn._core.mappings import GroupMapping, ColorMapping, MarkerMapping
+from seaborn._core.mappings import (
+    GroupMapping,
+    ColorMapping,
+    MarkerMapping,
+    DashMapping,
+)
 from seaborn._core.scales import (
     ScaleWrapper,
     CategoricalScale,
@@ -68,6 +73,7 @@ class Plot:
             "facecolor": ColorMapping(),
             "edgecolor": ColorMapping(),
             "marker": MarkerMapping(),
+            "dash": DashMapping(),
         }
 
         # TODO is using "unknown" here the best approach?
@@ -290,6 +296,14 @@ class Plot:
     ) -> Plot:
 
         self._mappings["marker"] = MarkerMapping(shapes)
+        return self
+
+    def map_dash(
+        self,
+        styles: list | dict | None = None,
+    ) -> Plot:
+
+        self._mappings["dash"] = DashMapping(styles)
         return self
 
     # TODO have map_gradient?

@@ -39,6 +39,12 @@ class Point(Mark):
 
     def _plot_split(self, keys, data, ax, mappings, kws):
 
+        # TODO can we simplify this by modifying data with mappings before sending in?
+        # Likewise, will we need to know `keys` here? Elsewhere we do `if key in keys`,
+        # but I think we can (or can make it so we can) just do `if key in data`.
+
+        # Then the signature could be _plot_split(ax, data, kws):  ... much simpler!
+
         # TODO since names match, can probably be automated!
         if "color" in data:
             c = mappings["color"](data["color"])
@@ -76,13 +82,15 @@ class Line(Mark):
     # i.e. Line needs to aggregate by x, but not plot by it
     # also how will this get parametrized to support orient=?
     # TODO will this sort by the orient dimension like lineplot currently does?
-    grouping_vars = ["color", "size", "style"]
+    grouping_vars = ["color", "marker", "dash"]
     supports = ["color"]
 
     def _plot_split(self, keys, data, ax, mappings, kws):
 
         if "color" in keys:
             kws["color"] = mappings["color"](keys["color"])
+        if "dash" in keys:
+            kws["linestyle"] = mappings["dash"](keys["dash"])
 
         ax.plot(data["x"], data["y"], **kws)
 

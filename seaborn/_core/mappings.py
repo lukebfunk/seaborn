@@ -1,4 +1,5 @@
 from __future__ import annotations
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 class SemanticMapping:
     """Base class for mappings between data and visual attributes."""
 
-    levels: list  # TODO Alternately, use keys of lookup_table?
+    levels: list  # TODO Alternately, use keys of dictionary?
 
     def setup(self, data: Series, scale: Scale | None) -> SemanticMapping:
         # TODO why not just implement the GroupMapping setup() here?
@@ -32,9 +33,9 @@ class SemanticMapping:
             if x.dtype.name == "category":  # TODO! possible pandas bug
                 x = x.astype(object)
             # TODO where is best place to ensure that LUT values are rgba tuples?
-            return np.stack(x.map(self.lookup_table))
+            return np.stack(x.map(self.dictionary))
         else:
-            return self.lookup_table[x]
+            return self.dictionary[x]
 
 
 # TODO Currently, the SemanticMapping objects are also the source of the information
@@ -57,11 +58,56 @@ class SemanticMapping:
 # that it makes sense to determine that information at different points in time.
 
 
-class GroupMapping(SemanticMapping):
+class GroupMapping(SemanticMapping):  # TODO only needed for levels...
     """Mapping that does not alter any visual properties of the artists."""
     def setup(self, data: Series, scale: Scale | None = None) -> GroupMapping:
         self.levels = categorical_order(data)
         return self
+
+
+class DictionaryMapping(SemanticMapping):
+
+    # TODO Mapping for variables like marker that always use a discrete lookup table
+    # Subclasses should define an infinite generate for default values
+
+    # TODO does this need a default __init__?
+
+    def _default_values(n):
+        raise NotImplementedError
+
+    def setup(
+        self,
+        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
+        scale: Scale | None = None,  # TODO or always have a Scale?
+    ) -> MarkerMapping:
+
+        provided = self._provided
+        order = None if scale is None else scale.order
+        levels = categorical_order(data, order)
+
+        # TODO input checking; generalize across mappings
+
+        if provided is None:
+            dictionary = dict(zip(levels, self._default_values(len(levels))))
+        elif isinstance(provided, dict):
+            dictionary = provided
+        elif isinstance(provided, list):
+            dictionary = dict(zip(levels, provided))
+
+        self.levels = levels
+        self.dictionary = dictionary
+
+        return self
+
+
+class NormedMapping(SemanticMapping):
+
+    # TODO Mapping for variables like radius that always use a norm.
+    # Categorical variables can be handled by always mapping to integer indices.
+    # There will need to be some accounting for the range too, e.g.
+    # The mapping is between a norm (in data space) and a range (in attribute space)
+    # But we need a better name than range because of the builtint.
+    ...
 
 
 class ColorMapping(SemanticMapping):
@@ -80,9 +126,9 @@ class ColorMapping(SemanticMapping):
             if x.dtype.name == "category":  # TODO! possible pandas bug
                 x = x.astype(object)
             # TODO where is best place to ensure that LUT values are rgba tuples?
-            return np.stack(x.map(self.lookup_table).map(to_rgb))
+            return np.stack(x.map(self.dictionary).map(to_rgb))
         else:
-            return to_rgb(self.lookup_table[x])
+            return to_rgb(self.dictionary[x])
 
     def setup(
         self,
@@ -111,7 +157,7 @@ class ColorMapping(SemanticMapping):
         if map_type == "numeric":
 
             data = pd.to_numeric(data)
-            levels, lookup_table, norm, cmap = self._setup_numeric(
+            levels, dictionary, norm, cmap = self._setup_numeric(
                 data, palette, norm,
             )
 
@@ -119,7 +165,7 @@ class ColorMapping(SemanticMapping):
 
         elif map_type == "categorical":
 
-            levels, lookup_table = self._setup_categorical(
+            levels, dictionary = self._setup_categorical(
                 data, palette, order,
             )
 
@@ -128,7 +174,7 @@ class ColorMapping(SemanticMapping):
         elif map_type == "datetime":
             # TODO this needs actual implementation
             cmap = norm = None
-            levels, lookup_table = self._setup_categorical(
+            levels, dictionary = self._setup_categorical(
                 # Casting data to list to handle differences in the way
                 # pandas and numpy represent datetime64 data
                 list(data), palette, order,
@@ -139,7 +185,7 @@ class ColorMapping(SemanticMapping):
 
         # TODO I don't love how this is kind of a mish-mash of attributes
         # Can we be more consistent across SemanticMapping subclasses?
-        self.lookup_table = lookup_table
+        self.dictionary = dictionary
         self.palette = palette
         self.levels = levels
         self.norm = norm
@@ -186,7 +232,7 @@ class ColorMapping(SemanticMapping):
                 err = "The palette dictionary is missing keys: {}"
                 raise ValueError(err.format(missing))
 
-            lookup_table = palette
+            dictionary = palette
 
         else:
 
@@ -203,9 +249,9 @@ class ColorMapping(SemanticMapping):
             else:
                 colors = color_palette(palette, n_colors)
 
-            lookup_table = dict(zip(levels, colors))
+            dictionary = dict(zip(levels, colors))
 
-        return levels, lookup_table
+        return levels, dictionary
 
     def _setup_numeric(
         self,
@@ -227,7 +273,7 @@ class ColorMapping(SemanticMapping):
             levels = list(sorted(palette))
             colors = [palette[k] for k in sorted(palette)]
             cmap = mpl.colors.ListedColormap(colors)
-            lookup_table = palette.copy()
+            dictionary = palette.copy()
 
         else:
 
@@ -256,12 +302,12 @@ class ColorMapping(SemanticMapping):
                 raise ValueError(err)
             norm.autoscale_None(data.dropna())
 
-            lookup_table = dict(zip(levels, cmap(norm(levels))))
+            dictionary = dict(zip(levels, cmap(norm(levels))))
 
-        return levels, lookup_table, norm, cmap
+        return levels, dictionary, norm, cmap
 
 
-class MarkerMapping(SemanticMapping):
+class MarkerMapping(DictionaryMapping):
 
     def __init__(self, shapes: list | dict | None = None):  # TODO full types
 
@@ -269,28 +315,154 @@ class MarkerMapping(SemanticMapping):
         # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
         # allow full matplotlib fillstyle API?
 
-        self._input_shapes = shapes
+        if isinstance(shapes, list):
+            shapes = [mpl.markers.MarkerStyle(s) for s in shapes]
+        elif isinstance(shapes, dict):
+            shapes = {k: mpl.markers.MarkerStyle(v) for k, v in shapes.items()}
 
-    def setup(
-        self,
-        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
-        scale: Scale | None = None,  # TODO or always have a Scale?
-    ) -> MarkerMapping:
+        self._provided = shapes
 
-        shapes = self._input_shapes
-        order = None if scale is None else scale.order
-        levels = categorical_order(data, order)
+    def _default_values(self, n):  # TODO or have this as an infinite generator?
+        """Build an arbitrarily long list of unique marker styles for points.
 
-        # TODO input checking; generalize across mappings
+        Parameters
+        ----------
+        n : int
+            Number of unique marker specs to generate.
 
-        # TODO default shapes
+        Returns
+        -------
+        markers : list of string or tuples
+            Values for defining :class:`matplotlib.markers.MarkerStyle` objects.
+            All markers will be filled.
 
-        if isinstance(shapes, dict):
-            shapes = {k: mpl.markers.MarkerStyle(s) for k, s in shapes.items()}
-        elif isinstance(shapes, list):
-            shapes = {k: mpl.markers.MarkerStyle(s) for k, s in zip(levels, shapes)}
+        """
+        # Start with marker specs that are well distinguishable
+        markers = [
+            "o",
+            "X",
+            (4, 0, 45),
+            "P",
+            (4, 0, 0),
+            (4, 1, 0),
+            "^",
+            (4, 1, 45),
+            "v",
+        ]
 
-        self.levels = levels
-        self.lookup_table = shapes
+        # Now generate more from regular polygons of increasing order
+        s = 5
+        while len(markers) < n:
+            a = 360 / (s + 1) / 2
+            markers.extend([
+                (s + 1, 1, a),
+                (s + 1, 0, a),
+                (s, 1, 0),
+                (s, 0, 0),
+            ])
+            s += 1
 
-        return self
+        # TODO use filled (maybe have different defaults depending on fill/nofill?)
+        markers = [mpl.markers.MarkerStyle(m) for m in markers]
+
+        return markers[:n]
+
+
+class DashMapping(DictionaryMapping):
+
+    def __init__(self, styles: list | dict | None = None):  # TODO full types
+
+        # TODO fill or filled parameter?
+        # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
+        # allow full matplotlib fillstyle API?
+
+        if isinstance(styles, list):
+            styles = [self._get_dash_pattern(s) for s in styles]
+        elif isinstance(styles, dict):
+            styles = {k: self._get_dash_pattern(v) for k, v in styles.items()}
+
+        self._provided = styles
+
+    def _default_values(self, n):
+        """Build an arbitrarily long list of unique dash styles for lines.
+
+        Parameters
+        ----------
+        n : int
+            Number of unique dash specs to generate.
+
+        Returns
+        -------
+        dashes : list of strings or tuples
+            Valid arguments for the ``dashes`` parameter on
+            :class:`matplotlib.lines.Line2D`. The first spec is a solid
+            line (``""``), the remainder are sequences of long and short
+            dashes.
+
+        """
+        # Start with dash specs that are well distinguishable
+        dashes = [
+            "-",  # TODO do we need to handle this elsewhere for backcompat?
+            (4, 1.5),
+            (1, 1),
+            (3, 1.25, 1.5, 1.25),
+            (5, 1, 1, 1),
+        ]
+
+        # Now programmatically build as many as we need
+        p = 3
+        while len(dashes) < n:
+
+            # Take combinations of long and short dashes
+            a = itertools.combinations_with_replacement([3, 1.25], p)
+            b = itertools.combinations_with_replacement([4, 1], p)
+
+            # Interleave the combinations, reversing one of the streams
+            segment_list = itertools.chain(*zip(
+                list(a)[1:-1][::-1],
+                list(b)[1:-1]
+            ))
+
+            # Now insert the gaps
+            for segments in segment_list:
+                gap = min(segments)
+                spec = tuple(itertools.chain(*((seg, gap) for seg in segments)))
+                dashes.append(spec)
+
+            p += 1
+
+        dashes = [self._get_dash_pattern(d) for d in dashes]
+
+        return dashes[:n]
+
+    def _get_dash_pattern(self, style):
+        """Convert linestyle to dash pattern."""
+        # TODO taken from matplotlib
+        # go from short hand -> full strings
+        ls_mapper = {'-': 'solid', '--': 'dashed', '-.': 'dashdot', ':': 'dotted'}
+        if isinstance(style, str):
+            style = ls_mapper.get(style, style)
+        # un-dashed styles
+        if style in ['solid', 'None']:
+            offset = 0
+            dashes = None
+        # dashed styles
+        elif style in ['dashed', 'dashdot', 'dotted']:
+            offset = 0
+            dashes = tuple(mpl.rcParams['lines.{}_pattern'.format(style)])
+        #
+        elif isinstance(style, tuple):
+            try:
+                offset, *dashes = style
+            except TypeError:
+                dashes = style
+        else:
+            raise ValueError('Unrecognized linestyle: %s' % str(style))
+
+        # normalize offset to be positive and shorter than the dash cycle
+        if dashes is not None:
+            dsum = sum(dashes)
+            if dsum:
+                offset %= dsum
+
+        return offset, dashes
