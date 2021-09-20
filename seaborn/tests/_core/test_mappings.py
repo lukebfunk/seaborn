@@ -17,6 +17,7 @@ from seaborn._core.mappings import (
     DashMapping,
     MarkerMapping,
 )
+from seaborn.palettes import color_palette
 
 
 class TestGroupMapping:

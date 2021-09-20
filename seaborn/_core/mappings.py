@@ -94,7 +94,7 @@ class DictionaryMapping(SemanticMapping):
         elif isinstance(provided, dict):
             missing = set(data) - set(provided)
             if missing:
-                formatted = ", ".join(map(repr, missing))
+                formatted = ", ".join(map(repr, sorted(missing, key=str)))
                 err = f"Missing {self._semantic} for following value(s): {formatted}"
                 raise ValueError(err)
             dictionary = provided
