@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib as mpl
 from matplotlib.colors import to_rgb
 
+from seaborn._compat import MarkerStyle
 from seaborn._core.rules import VarType, variable_type, categorical_order
 from seaborn.utils import get_color_cycle, remove_na
 from seaborn.palettes import QUAL_PALETTES, color_palette
@@ -333,9 +334,9 @@ class MarkerMapping(DictionaryMapping):
         # allow full matplotlib fillstyle API?
 
         if isinstance(shapes, list):
-            shapes = [mpl.markers.MarkerStyle(s) for s in shapes]
+            shapes = [MarkerStyle(s) for s in shapes]
         elif isinstance(shapes, dict):
-            shapes = {k: mpl.markers.MarkerStyle(v) for k, v in shapes.items()}
+            shapes = {k: MarkerStyle(v) for k, v in shapes.items()}
 
         self._provided = shapes
 
@@ -380,7 +381,7 @@ class MarkerMapping(DictionaryMapping):
             s += 1
 
         # TODO use filled (maybe have different defaults depending on fill/nofill?)
-        markers = [mpl.markers.MarkerStyle(m) for m in markers]
+        markers = [MarkerStyle(m) for m in markers]
 
         return markers[:n]
 

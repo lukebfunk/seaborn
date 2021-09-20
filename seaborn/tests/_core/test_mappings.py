@@ -1,7 +1,6 @@
 
 import numpy as np
 import pandas as pd
-import matplotlib as mpl
 from matplotlib.scale import LinearScale
 from matplotlib.colors import Normalize, to_rgb
 
@@ -9,7 +8,7 @@ import pytest
 from numpy.testing import assert_array_equal
 
 # TODO from seaborn._compat import MarkerStyle
-from seaborn.palettes import color_palette
+from seaborn._compat import MarkerStyle
 from seaborn._core.rules import categorical_order
 from seaborn._core.scales import ScaleWrapper, CategoricalScale
 from seaborn._core.mappings import (
@@ -406,8 +405,8 @@ class TestMarkerMapping:
 
     def assert_markers_equal(self, a, b):
 
-        a = mpl.markers.MarkerStyle(a)
-        b = mpl.markers.MarkerStyle(b)
+        a = MarkerStyle(a)
+        b = MarkerStyle(b)
         assert a.get_path() == b.get_path()
         assert a.get_joinstyle() == b.get_joinstyle()
         assert a.get_transform().to_values() == b.get_transform().to_values()
@@ -425,7 +424,7 @@ class TestMarkerMapping:
         )) == n
 
         for m in markers:
-            assert mpl.markers.MarkerStyle(m).is_filled()
+            assert MarkerStyle(m).is_filled()
 
     def test_none_provided(self):
 
@@ -445,7 +444,7 @@ class TestMarkerMapping:
     def test_provided_list(self):
 
         keys = pd.Series(["a", "b", "c"])
-        markers = ["o", (5, 2, 0), mpl.markers.MarkerStyle("o", fillstyle="none")]
+        markers = ["o", (5, 2, 0), MarkerStyle("o", fillstyle="none")]
         m = MarkerMapping(markers).setup(keys)
 
         for key, want in zip(keys, markers):
@@ -459,7 +458,7 @@ class TestMarkerMapping:
     def test_provided_dict(self):
 
         keys = pd.Series(["a", "b", "c"])
-        values = ["o", (5, 2, 0), mpl.markers.MarkerStyle("o", fillstyle="none")]
+        values = ["o", (5, 2, 0), MarkerStyle("o", fillstyle="none")]
         markers = dict(zip(keys, values))
         m = MarkerMapping(markers).setup(keys)
 
