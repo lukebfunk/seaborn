@@ -1,5 +1,6 @@
 from __future__ import annotations
 import itertools
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -12,10 +13,14 @@ from seaborn.palettes import QUAL_PALETTES, color_palette
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
+    from typing import Tuple, Optional
     from pandas import Series
     from matplotlib.colors import Colormap, Normalize
     from matplotlib.scale import Scale
     from seaborn._core.typing import PaletteSpec
+
+    DashPattern = Tuple[float, ...]
+    DashPatternWithOffset = Tuple[float, Optional[DashPattern]]
 
 
 class SemanticMapping:
@@ -33,7 +38,9 @@ class SemanticMapping:
             if x.dtype.name == "category":  # TODO! possible pandas bug
                 x = x.astype(object)
             # TODO where is best place to ensure that LUT values are rgba tuples?
-            return np.stack(x.map(self.dictionary))
+            # TODO may need to move below line to ColorMapping
+            # return np.stack(x.map(self.dictionary))
+            return x.map(self.dictionary)
         else:
             return self.dictionary[x]
 
@@ -41,22 +48,13 @@ class SemanticMapping:
 # TODO Currently, the SemanticMapping objects are also the source of the information
 # about the levels/order of the semantic variables. Do we want to decouple that?
 
-# In favor:
-# Sometimes (i.e. categorical plots) we need to know x/y order, and we also need
-# to know facet variable orders, so having a consistent way of defining order
-# across all of the variables would be nice.
-
-# Against:
-# Our current external interface consumes both mapping parameterization like the
-# color palette to use and the order information. I think this makes a fair amount
-# of sense. But we could also break those, e.g. have `scale_fixed("color", order=...)`
-# similar to what we are currently developing for the x/y. Is is another method call
-# which may be annoying. But then alternately it is maybe more consistent (and would
-# consistently hook into whatever internal representation we'll use for variable order).
-# Also, the parameters of the semantic mapping often implies a particular scale
-# (i.e., providing a palette list forces categorical treatment) so it's not clear
-# that it makes sense to determine that information at different points in time.
-
+# TODO Perhaps the setup method should not add attributes and return self, but rather
+# return an object that is initialized to do the mapping. This would make it so that
+# Plotter._setup_mappings() won't mutate attributes on the Plot that generated it.
+# Think about this a bit more but I think it's the way forward. Decrease state!
+# Also if __init__ is just going to store information, can we abstract that in
+# a nice way while also having a method with a signature/docstring we can use to
+# attach map_{semantic} methods to Plot?
 
 class GroupMapping(SemanticMapping):  # TODO only needed for levels...
     """Mapping that does not alter any visual properties of the artists."""
@@ -65,34 +63,49 @@ class GroupMapping(SemanticMapping):  # TODO only needed for levels...
         return self
 
 
+# Alt name DictMapping
 class DictionaryMapping(SemanticMapping):
+
+    _provided: dict | list | None
+    _semantic: str | None
 
     # TODO Mapping for variables like marker that always use a discrete lookup table
     # Subclasses should define an infinite generate for default values
 
     # TODO does this need a default __init__?
 
-    def _default_values(n):
+    def _default_values(self, n: int) -> list:
+        """Return n unique values."""
         raise NotImplementedError
 
     def setup(
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
-    ) -> MarkerMapping:
+    ) -> DictionaryMapping:
 
         provided = self._provided
         order = None if scale is None else scale.order
         levels = categorical_order(data, order)
 
-        # TODO input checking; generalize across mappings
-
         if provided is None:
             dictionary = dict(zip(levels, self._default_values(len(levels))))
         elif isinstance(provided, dict):
+            missing = set(data) - set(provided)
+            if missing:
+                formatted = ", ".join(map(repr, missing))
+                err = f"Missing {self._semantic} for following value(s): {formatted}"
+                raise ValueError(err)
             dictionary = provided
         elif isinstance(provided, list):
-            dictionary = dict(zip(levels, provided))
+            if len(provided) < len(levels):
+                msg = (
+                    f"The {self._semantic} list has fewer values ({len(provided)}) "
+                    f"than needed ({len(levels)}) and will cycle, which may produce "
+                    "an uninterpretable plot."
+                )
+                warnings.warn(msg, UserWarning)
+            dictionary = dict(zip(levels, itertools.cycle(provided)))
 
         self.levels = levels
         self.dictionary = dictionary
@@ -100,6 +113,7 @@ class DictionaryMapping(SemanticMapping):
         return self
 
 
+# Alt name NormMapping
 class NormedMapping(SemanticMapping):
 
     # TODO Mapping for variables like radius that always use a norm.
@@ -110,6 +124,7 @@ class NormedMapping(SemanticMapping):
     ...
 
 
+# Alt name RGBAMapping
 class ColorMapping(SemanticMapping):
     """Mapping that sets artist colors according to data values."""
 
@@ -309,6 +324,8 @@ class ColorMapping(SemanticMapping):
 
 class MarkerMapping(DictionaryMapping):
 
+    _semantic = "marker"
+
     def __init__(self, shapes: list | dict | None = None):  # TODO full types
 
         # TODO fill or filled parameter?
@@ -370,6 +387,8 @@ class MarkerMapping(DictionaryMapping):
 
 class DashMapping(DictionaryMapping):
 
+    _semantic = "dash pattern"
+
     def __init__(self, styles: list | dict | None = None):  # TODO full types
 
         # TODO fill or filled parameter?
@@ -383,7 +402,7 @@ class DashMapping(DictionaryMapping):
 
         self._provided = styles
 
-    def _default_values(self, n):
+    def _default_values(self, n: int) -> list[DashPatternWithOffset]:
         """Build an arbitrarily long list of unique dash styles for lines.
 
         Parameters
@@ -401,7 +420,7 @@ class DashMapping(DictionaryMapping):
 
         """
         # Start with dash specs that are well distinguishable
-        dashes = [
+        dashes: list[str | DashPattern] = [
             "-",  # TODO do we need to handle this elsewhere for backcompat?
             (4, 1.5),
             (1, 1),
@@ -431,33 +450,35 @@ class DashMapping(DictionaryMapping):
 
             p += 1
 
-        dashes = [self._get_dash_pattern(d) for d in dashes]
+        return [self._get_dash_pattern(d) for d in dashes[:n]]
 
-        return dashes[:n]
-
-    def _get_dash_pattern(self, style):
+    @staticmethod
+    def _get_dash_pattern(style: str | DashPattern) -> DashPatternWithOffset:
         """Convert linestyle to dash pattern."""
-        # TODO taken from matplotlib
+        # Copied and modified from Matplotlib 3.4
         # go from short hand -> full strings
         ls_mapper = {'-': 'solid', '--': 'dashed', '-.': 'dashdot', ':': 'dotted'}
         if isinstance(style, str):
             style = ls_mapper.get(style, style)
-        # un-dashed styles
-        if style in ['solid', 'None']:
-            offset = 0
-            dashes = None
-        # dashed styles
-        elif style in ['dashed', 'dashdot', 'dotted']:
-            offset = 0
-            dashes = tuple(mpl.rcParams['lines.{}_pattern'.format(style)])
-        #
+            # un-dashed styles
+            if style in ['solid', 'none', 'None']:
+                offset = 0
+                dashes = None
+            # dashed styles
+            elif style in ['dashed', 'dashdot', 'dotted']:
+                offset = 0
+                dashes = tuple(mpl.rcParams[f'lines.{style}_pattern'])
+
         elif isinstance(style, tuple):
-            try:
-                offset, *dashes = style
-            except TypeError:
+            if len(style) > 1 and isinstance(style[1], tuple):
+                offset, dashes = style
+            elif len(style) > 1 and style[1] is None:
+                offset, dashes = style
+            else:
+                offset = 0
                 dashes = style
         else:
-            raise ValueError('Unrecognized linestyle: %s' % str(style))
+            raise ValueError(f'Unrecognized linestyle: {style}')
 
         # normalize offset to be positive and shorter than the dash cycle
         if dashes is not None:

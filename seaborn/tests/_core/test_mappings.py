@@ -1,16 +1,23 @@
 
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 from matplotlib.scale import LinearScale
 from matplotlib.colors import Normalize, to_rgb
 
 import pytest
 from numpy.testing import assert_array_equal
 
+# TODO from seaborn._compat import MarkerStyle
 from seaborn.palettes import color_palette
 from seaborn._core.rules import categorical_order
 from seaborn._core.scales import ScaleWrapper, CategoricalScale
-from seaborn._core.mappings import GroupMapping, ColorMapping
+from seaborn._core.mappings import (
+    GroupMapping,
+    ColorMapping,
+    DashMapping,
+    MarkerMapping,
+)
 
 
 class TestGroupMapping:
@@ -310,3 +317,172 @@ class TestColorMapping:
         scale = ScaleWrapper(LinearScale("color"), "numeric", norm=norm)
         with pytest.raises(ValueError):
             ColorMapping().setup(num_vector, scale)
+
+
+class TestDashMapping:
+
+    def assert_dashes_equal(self, a, b):
+
+        a = DashMapping._get_dash_pattern(a)
+        b = DashMapping._get_dash_pattern(b)
+        assert a == b
+
+    def test_unique_dashes(self):
+
+        n = 24
+        dashes = DashMapping()._default_values(n)
+
+        assert len(dashes) == n
+        assert len(set(dashes)) == n
+
+        assert dashes[0] == (0, None)
+        for spec in dashes[1:]:
+            assert isinstance(spec, tuple)
+            assert spec[0] == 0
+            assert not len(spec[1]) % 2
+
+    def test_none_provided(self):
+
+        keys = pd.Series(["a", "b", "c"])
+        m = DashMapping().setup(keys)
+
+        defaults = DashMapping()._default_values(len(keys))
+
+        for key, want in zip(keys, defaults):
+            self.assert_dashes_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(defaults)
+        for have, want in zip(mapped, defaults):
+            self.assert_dashes_equal(have, want)
+
+    def test_provided_list(self):
+
+        keys = pd.Series(["a", "b", "c", "d"])
+        dashes = ["-", (1, 4), "dashed", (.5, (5, 2))]
+        m = DashMapping(dashes).setup(keys)
+
+        for key, want in zip(keys, dashes):
+            self.assert_dashes_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(dashes)
+        for have, want in zip(mapped, dashes):
+            self.assert_dashes_equal(have, want)
+
+    def test_provided_dict(self):
+
+        keys = pd.Series(["a", "b", "c", "d"])
+        values = ["-", (1, 4), "dashed", (.5, (5, 2))]
+        dashes = dict(zip(keys, values))
+        m = DashMapping(dashes).setup(keys)
+
+        for key, want in dashes.items():
+            self.assert_dashes_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(values)
+        for have, want in zip(mapped, values):
+            self.assert_dashes_equal(have, want)
+
+    def test_provided_dict_with_missing(self):
+
+        m = DashMapping({})
+        keys = pd.Series(["a", 1])
+        err = r"Missing dash pattern for following value\(s\): 1, 'a'"
+        with pytest.raises(ValueError, match=err):
+            m.setup(keys)
+
+    def test_provided_list_too_short(self):
+
+        m = DashMapping(["-", "dashed"])
+        keys = pd.Series(["a", "b", "c"])
+        msg = r"The dash pattern list has fewer values \(2\) than needed \(3\)"
+        with pytest.warns(UserWarning, match=msg):
+            m.setup(keys)
+
+
+class TestMarkerMapping:
+
+    def assert_markers_equal(self, a, b):
+
+        a = mpl.markers.MarkerStyle(a)
+        b = mpl.markers.MarkerStyle(b)
+        assert a.get_path() == b.get_path()
+        assert a.get_joinstyle() == b.get_joinstyle()
+        assert a.get_transform().to_values() == b.get_transform().to_values()
+        assert a.get_fillstyle() == b.get_fillstyle()
+
+    def test_unique_markers(self):
+
+        n = 24
+        markers = MarkerMapping()._default_values(n)
+
+        assert len(markers) == n
+        assert len(set(
+            (m.get_path(), m.get_joinstyle(), m.get_transform().to_values())
+            for m in markers
+        )) == n
+
+        for m in markers:
+            assert mpl.markers.MarkerStyle(m).is_filled()
+
+    def test_none_provided(self):
+
+        keys = pd.Series(["a", "b", "c"])
+        m = MarkerMapping().setup(keys)
+
+        defaults = MarkerMapping()._default_values(len(keys))
+
+        for key, want in zip(keys, defaults):
+            self.assert_markers_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(defaults)
+        for have, want in zip(mapped, defaults):
+            self.assert_markers_equal(have, want)
+
+    def test_provided_list(self):
+
+        keys = pd.Series(["a", "b", "c"])
+        markers = ["o", (5, 2, 0), mpl.markers.MarkerStyle("o", fillstyle="none")]
+        m = MarkerMapping(markers).setup(keys)
+
+        for key, want in zip(keys, markers):
+            self.assert_markers_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(markers)
+        for have, want in zip(mapped, markers):
+            self.assert_markers_equal(have, want)
+
+    def test_provided_dict(self):
+
+        keys = pd.Series(["a", "b", "c"])
+        values = ["o", (5, 2, 0), mpl.markers.MarkerStyle("o", fillstyle="none")]
+        markers = dict(zip(keys, values))
+        m = MarkerMapping(markers).setup(keys)
+
+        for key, want in markers.items():
+            self.assert_markers_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(values)
+        for have, want in zip(mapped, values):
+            self.assert_markers_equal(have, want)
+
+    def test_provided_dict_with_missing(self):
+
+        m = MarkerMapping({})
+        keys = pd.Series(["a", 1])
+        err = r"Missing marker for following value\(s\): 1, 'a'"
+        with pytest.raises(ValueError, match=err):
+            m.setup(keys)
+
+    def test_provided_list_too_short(self):
+
+        m = MarkerMapping(["o", "s"])
+        keys = pd.Series(["a", "b", "c"])
+        msg = r"The marker list has fewer values \(2\) than needed \(3\)"
+        with pytest.warns(UserWarning, match=msg):
+            m.setup(keys)
