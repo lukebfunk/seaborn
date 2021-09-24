@@ -14,7 +14,7 @@ from seaborn.palettes import QUAL_PALETTES, color_palette
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from typing import Tuple, Optional
+    from typing import Any, Callable, Optional, Tuple
     from pandas import Series
     from matplotlib.colors import Colormap, Normalize
     from matplotlib.scale import Scale
@@ -24,56 +24,21 @@ if TYPE_CHECKING:
     DashPatternWithOffset = Tuple[float, Optional[DashPattern]]
 
 
-class SemanticMapping:
-    """Base class for mappings between data and visual attributes."""
-
-    levels: list  # TODO Alternately, use keys of dictionary?
-
-    def setup(self, data: Series, scale: Scale | None) -> SemanticMapping:
-        # TODO why not just implement the GroupMapping setup() here?
-        raise NotImplementedError()
-
-    def __call__(self, x):  # TODO types; will need to overload (wheee)
-        # TODO this is a hack to get things working
-        if isinstance(x, pd.Series):
-            if x.dtype.name == "category":  # TODO! possible pandas bug
-                x = x.astype(object)
-            # TODO where is best place to ensure that LUT values are rgba tuples?
-            # TODO may need to move below line to ColorMapping
-            # return np.stack(x.map(self.dictionary))
-            return x.map(self.dictionary)
-        else:
-            return self.dictionary[x]
+# TODO I think we want map_semantic to accept _order/_norm parameters.
+# But that forces some decisions:
+# - Which takes precedence? (i.e. .map_ vs .scale_)?
+# - Does Plot.map_ internally call self.scale_ or hand off to the Semantic?
 
 
-# TODO Currently, the SemanticMapping objects are also the source of the information
-# about the levels/order of the semantic variables. Do we want to decouple that?
-
-# TODO Perhaps the setup method should not add attributes and return self, but rather
-# return an object that is initialized to do the mapping. This would make it so that
-# Plotter._setup_mappings() won't mutate attributes on the Plot that generated it.
-# Think about this a bit more but I think it's the way forward. Decrease state!
-# Also if __init__ is just going to store information, can we abstract that in
-# a nice way while also having a method with a signature/docstring we can use to
-# attach map_{semantic} methods to Plot?
-
-class GroupMapping(SemanticMapping):  # TODO only needed for levels...
-    """Mapping that does not alter any visual properties of the artists."""
-    def setup(self, data: Series, scale: Scale | None = None) -> GroupMapping:
-        self.levels = categorical_order(data)
-        return self
+class Semantic:
+    ...
 
 
-# Alt name DictMapping
-class DictionaryMapping(SemanticMapping):
+class BinarySemantic(Semantic):
+    ...
 
-    _provided: dict | list | None
-    _semantic: str | None
 
-    # TODO Mapping for variables like marker that always use a discrete lookup table
-    # Subclasses should define an infinite generate for default values
-
-    # TODO does this need a default __init__?
+class DiscreteSemantic(Semantic):
 
     def _default_values(self, n: int) -> list:
         """Return n unique values."""
@@ -83,61 +48,104 @@ class DictionaryMapping(SemanticMapping):
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
-    ) -> DictionaryMapping:
+    ) -> LookupMapping:
 
         provided = self._provided
         order = None if scale is None else scale.order
         levels = categorical_order(data, order)
 
         if provided is None:
-            dictionary = dict(zip(levels, self._default_values(len(levels))))
+            mapping = dict(zip(levels, self._default_values(len(levels))))
+        # TODO generalize these input checks in Semantic
         elif isinstance(provided, dict):
             missing = set(data) - set(provided)
             if missing:
                 formatted = ", ".join(map(repr, sorted(missing, key=str)))
                 err = f"Missing {self._semantic} for following value(s): {formatted}"
                 raise ValueError(err)
-            dictionary = provided
+            mapping = provided
         elif isinstance(provided, list):
-            if len(provided) < len(levels):
-                msg = (
-                    f"The {self._semantic} list has fewer values ({len(provided)}) "
-                    f"than needed ({len(levels)}) and will cycle, which may produce "
-                    "an uninterpretable plot."
-                )
+            if len(provided) > len(levels):
+                msg = " ".join([
+                    f"The {self._semantic} list has fewer values ({len(provided)})",
+                    f"than needed ({len(levels)}) and will cycle, which may",
+                    "produce an uninterpretable plot."
+                ])
                 warnings.warn(msg, UserWarning)
-            dictionary = dict(zip(levels, itertools.cycle(provided)))
+            mapping = dict(zip(levels, itertools.cycle(provided)))
 
-        self.levels = levels
-        self.dictionary = dictionary
-
-        return self
+        return LookupMapping(mapping)
 
 
-# Alt name NormMapping
-class NormedMapping(SemanticMapping):
+class ContinuousSemantic(Semantic):
 
-    # TODO Mapping for variables like radius that always use a norm.
-    # Categorical variables can be handled by always mapping to integer indices.
-    # There will need to be some accounting for the range too, e.g.
-    # The mapping is between a norm (in data space) and a range (in attribute space)
-    # But we need a better name than range because of the builtint.
+    norm: Normalize
+    values: tuple[float, float]
+
+    def __init__(
+        self,
+        values: tuple[float, float] | list[float] | dict[Any, float] | None,
+    ):
+
+        self._values = values
+
+    def _infer_map_type(
+        self,
+        scale: Scale,
+        provided: tuple[float, float] | list[float] | dict[Any, float] | None,
+        data: Series,
+    ) -> VarType:
+        """Determine how to implement the mapping."""
+        map_type: VarType
+        if scale is not None:
+            return scale.type
+        else:
+            map_type = variable_type(data, boolean_type="categorical")
+        return map_type
+
+    def setup(
+        self,
+        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
+        scale: Scale | None = None,  # TODO or always have a Scale?
+    ) -> NormedMapping:
+
+        values = self._values
+        # norm = None if scale is None else scale.norm
+        # order = None if scale is None else scale.order
+        map_type = self._infer_map_type(scale, values, data)  # TODO use norm/order?
+
+        if map_type == "numeric":
+
+            ...
+
+        elif map_type == "categorical":
+
+            ...
+
+        elif map_type == "datetime":
+
+            ...
+
+    def _setup_categorical(data, values, order):
+        ...
+
+
+# ==================================================================================== #
+
+
+class FillSemantic(BinarySemantic):
     ...
 
 
-# Alt name RGBAMapping
-class ColorMapping(SemanticMapping):
-    """Mapping that sets artist colors according to data values."""
-
-    # TODO type the important class attributes here
+class ColorSemantic(Semantic):
 
     def __init__(self, palette: PaletteSpec = None):
 
-        self._input_palette = palette
+        self._palette = palette
 
-    def __call__(self, x):  # TODO types; will need to overload (wheee)
-        # TODO this is a hack to get things working
-        # We are missing numeric maps and lots of other things
+    def __call__(self, x):  # TODO types; will need to overload
+
+        # TODO we are missing numeric maps and lots of other things
         if isinstance(x, pd.Series):
             if x.dtype.name == "category":  # TODO! possible pandas bug
                 x = x.astype(object)
@@ -146,13 +154,31 @@ class ColorMapping(SemanticMapping):
         else:
             return to_rgb(self.dictionary[x])
 
+    def _infer_map_type(
+        self,
+        scale: Scale,
+        palette: PaletteSpec,
+        data: Series,
+    ) -> VarType:
+        """Determine how to implement the mapping."""
+        map_type: VarType
+        if scale is not None:
+            return scale.type
+        elif palette in QUAL_PALETTES:
+            map_type = VarType("categorical")
+        elif isinstance(palette, (dict, list)):
+            map_type = VarType("categorical")
+        else:
+            map_type = variable_type(data, boolean_type="categorical")
+        return map_type
+
     def setup(
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
     ) -> ColorMapping:
         """Infer the type of mapping to use and define it using this vector of data."""
-        palette: PaletteSpec = self._input_palette
+        palette: PaletteSpec = self._palette
         cmap: Colormap | None = None
 
         norm = None if scale is None else scale.norm
@@ -162,27 +188,22 @@ class ColorMapping(SemanticMapping):
         # e.g. specifying a numeric scale and a qualitative colormap should fail nicely.
 
         map_type = self._infer_map_type(scale, palette, data)
-        assert map_type in ["numeric", "categorical", "datetime"]
 
-        # Our goal is to end up with a dictionary mapping every unique
-        # value in `data` to a color. We will also keep track of the
-        # metadata about this mapping we will need for, e.g., a legend
+        if map_type == "categorical":
 
-        # --- Option 1: numeric mapping with a matplotlib colormap
+            # TODO what are we doing with levels now?
+            levels, mapping = self._setup_categorical(
+                data, palette, order,
+            )
+            return LookupMapping(mapping)
 
-        if map_type == "numeric":
+        elif map_type == "numeric":
+
+            # TODO
 
             data = pd.to_numeric(data)
             levels, dictionary, norm, cmap = self._setup_numeric(
                 data, palette, norm,
-            )
-
-        # --- Option 2: categorical mapping using seaborn palette
-
-        elif map_type == "categorical":
-
-            levels, dictionary = self._setup_categorical(
-                data, palette, order,
             )
 
         # --- Option 3: datetime mapping
@@ -208,24 +229,6 @@ class ColorMapping(SemanticMapping):
         self.cmap = cmap
 
         return self
-
-    def _infer_map_type(
-        self,
-        scale: Scale,
-        palette: PaletteSpec,
-        data: Series,
-    ) -> VarType:
-        """Determine how to implement the mapping."""
-        map_type: VarType
-        if scale is not None:
-            return scale.type
-        elif palette in QUAL_PALETTES:
-            map_type = VarType("categorical")
-        elif isinstance(palette, (dict, list)):
-            map_type = VarType("categorical")
-        else:
-            map_type = variable_type(data, boolean_type="categorical")
-        return map_type
 
     def _setup_categorical(
         self,
@@ -269,62 +272,10 @@ class ColorMapping(SemanticMapping):
 
         return levels, dictionary
 
-    def _setup_numeric(
-        self,
-        data: Series,
-        palette: PaletteSpec,
-        norm: Normalize | None,
-    ) -> tuple[list, dict, Normalize | None, Colormap]:
-        """Determine colors when the variable is quantitative."""
-        cmap: Colormap
-        if isinstance(palette, dict):
 
-            # In the function interface, the presence of a norm object overrides
-            # a dictionary of colors to specify a numeric mapping, so we need
-            # to process it here.
-            # TODO this functionality only exists to support the old relplot
-            # hack for linking hue orders across facets.  We don't need that any
-            # more and should probably remove this, but needs deprecation.
-            # (Also what should new behavior be? I think an error probably).
-            levels = list(sorted(palette))
-            colors = [palette[k] for k in sorted(palette)]
-            cmap = mpl.colors.ListedColormap(colors)
-            dictionary = palette.copy()
+class MarkerSemantic(DiscreteSemantic):
 
-        else:
-
-            # The levels are the sorted unique values in the data
-            levels = list(np.sort(remove_na(data.unique())))
-
-            # --- Sort out the colormap to use from the palette argument
-
-            # Default numeric palette is our default cubehelix palette
-            # TODO do we want to do something complicated to ensure contrast?
-            palette = "ch:" if palette is None else palette
-
-            if isinstance(palette, mpl.colors.Colormap):
-                cmap = palette
-            else:
-                cmap = color_palette(palette, as_cmap=True)
-
-            # Now sort out the data normalization
-            # TODO consolidate in ScaleWrapper so we always have a norm here?
-            if norm is None:
-                norm = mpl.colors.Normalize()
-            elif isinstance(norm, tuple):
-                norm = mpl.colors.Normalize(*norm)
-            elif not isinstance(norm, mpl.colors.Normalize):
-                err = "`norm` must be None, tuple, or Normalize object."
-                raise ValueError(err)
-            norm.autoscale_None(data.dropna())
-
-            dictionary = dict(zip(levels, cmap(norm(levels))))
-
-        return levels, dictionary, norm, cmap
-
-
-class MarkerMapping(DictionaryMapping):
-
+    # TODO This may have to be a parameters? (e.g. for color/edgecolor)
     _semantic = "marker"
 
     def __init__(self, shapes: list | dict | None = None):  # TODO full types
@@ -386,7 +337,7 @@ class MarkerMapping(DictionaryMapping):
         return markers[:n]
 
 
-class DashMapping(DictionaryMapping):
+class DashSemantic(DiscreteSemantic):
 
     _semantic = "dash pattern"
 
@@ -488,3 +439,148 @@ class DashMapping(DictionaryMapping):
                 offset %= dsum
 
         return offset, dashes
+
+
+class AreaSemantic(ContinuousSemantic):
+    ...
+
+
+# ==================================================================================== #
+
+class SemanticMapping:
+    ...
+
+
+class LookupMapping(SemanticMapping):
+
+    def __init__(self, mapping: dict):
+
+        self.mapping = mapping
+
+    def __call__(self, x: Any) -> Any:  # Possibly to type output based on lookup_table?
+
+        if isinstance(x, pd.Series):
+            if x.dtype.name == "category":
+                # https://github.com/pandas-dev/pandas/issues/41669
+                x = x.astype(object)
+            return x.map(self.mapping)
+        else:
+            return self.mapping[x]
+
+
+class NormedMapping(SemanticMapping):
+
+    def __init__(self, norm: Normalize, transform: Callable[float, Any]):
+
+        self.norm = norm
+        self.transform = transform
+
+    def __call__(self, x: Any) -> Any:
+
+        # TODO can we work out whether transform is vectorized and use it that way?
+        # (Or ensure that it is, since we control it?)
+        # TODO note that matplotlib Normalize is going to return a masked array
+        # maybe this is fine since we're handing the output off to matplotlib?
+        return self.transform(self.norm(x))
+
+# ==================================================================================== #
+
+
+class SemanticMapping:
+    """Base class for mappings between data and visual attributes."""
+
+    levels: list  # TODO Alternately, use keys of dictionary?
+
+    def setup(self, data: Series, scale: Scale | None) -> SemanticMapping:
+        # TODO why not just implement the GroupMapping setup() here?
+        raise NotImplementedError()
+
+    def __call__(self, x):  # TODO types; will need to overload (wheee)
+        # TODO this is a hack to get things working
+        if isinstance(x, pd.Series):
+            if x.dtype.name == "category":  # TODO! possible pandas bug
+                x = x.astype(object)
+            # TODO where is best place to ensure that LUT values are rgba tuples?
+            # TODO may need to move below line to ColorMapping
+            # return np.stack(x.map(self.dictionary))
+            return x.map(self.dictionary)
+        else:
+            return self.dictionary[x]
+
+
+# TODO Currently, the SemanticMapping objects are also the source of the information
+# about the levels/order of the semantic variables. Do we want to decouple that?
+
+# TODO Perhaps the setup method should not add attributes and return self, but rather
+# return an object that is initialized to do the mapping. This would make it so that
+# Plotter._setup_mappings() won't mutate attributes on the Plot that generated it.
+# Think about this a bit more but I think it's the way forward. Decrease state!
+# Also if __init__ is just going to store information, can we abstract that in
+# a nice way while also having a method with a signature/docstring we can use to
+# attach map_{semantic} methods to Plot?
+
+class GroupMapping(SemanticMapping):  # TODO only needed for levels...
+    """Mapping that does not alter any visual properties of the artists."""
+    def setup(self, data: Series, scale: Scale | None = None) -> GroupMapping:
+        self.levels = categorical_order(data)
+        return self
+
+
+# Alt name RGBAMapping
+class ColorMapping(SemanticMapping):
+    """Mapping that sets artist colors according to data values."""
+
+    # TODO type the important class attributes here
+
+    def _setup_numeric(
+        self,
+        data: Series,
+        palette: PaletteSpec,
+        norm: Normalize | None,
+    ) -> tuple[list, dict, Normalize | None, Colormap]:
+        """Determine colors when the variable is quantitative."""
+        cmap: Colormap
+        if isinstance(palette, dict):
+
+            # In the function interface, the presence of a norm object overrides
+            # a dictionary of colors to specify a numeric mapping, so we need
+            # to process it here.
+            # TODO this functionality only exists to support the old relplot
+            # hack for linking hue orders across facets.  We don't need that any
+            # more and should probably remove this, but needs deprecation.
+            # (Also what should new behavior be? I think an error probably).
+            levels = list(sorted(palette))
+            colors = [palette[k] for k in sorted(palette)]
+            cmap = mpl.colors.ListedColormap(colors)
+            dictionary = palette.copy()
+
+        else:
+
+            # The levels are the sorted unique values in the data
+            levels = list(np.sort(remove_na(data.unique())))
+
+            # --- Sort out the colormap to use from the palette argument
+
+            # Default numeric palette is our default cubehelix palette
+            # TODO do we want to do something complicated to ensure contrast?
+            palette = "ch:" if palette is None else palette
+
+            if isinstance(palette, mpl.colors.Colormap):
+                cmap = palette
+            else:
+                cmap = color_palette(palette, as_cmap=True)
+
+            # Now sort out the data normalization
+            # TODO consolidate in ScaleWrapper so we always have a norm here?
+            if norm is None:
+                norm = mpl.colors.Normalize()
+            elif isinstance(norm, tuple):
+                norm = mpl.colors.Normalize(*norm)
+            elif not isinstance(norm, mpl.colors.Normalize):
+                err = "`norm` must be None, tuple, or Normalize object."
+                raise ValueError(err)
+            norm.autoscale_None(data.dropna())
+
+            dictionary = dict(zip(levels, cmap(norm(levels))))
+
+        return levels, dictionary, norm, cmap

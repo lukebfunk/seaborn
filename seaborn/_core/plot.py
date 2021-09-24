@@ -15,9 +15,9 @@ from seaborn._core.data import PlotData
 from seaborn._core.subplots import Subplots
 from seaborn._core.mappings import (
     GroupMapping,
-    ColorMapping,
-    MarkerMapping,
-    DashMapping,
+    ColorSemantic,
+    MarkerSemantic,
+    DashSemantic,
 )
 from seaborn._core.scales import (
     ScaleWrapper,
@@ -45,6 +45,7 @@ class Plot:
 
     _data: PlotData
     _layers: list[Layer]
+    # TODO -> _semantics, have _mappings hold the objects returned from Semantic.setup?
     _mappings: dict[str, SemanticMapping]  # TODO keys as Literal, or use TypedDict?
     _scales: dict[str, ScaleBase]
 
@@ -68,12 +69,12 @@ class Plot:
         # empty and define the defaults elsewhere
         # TODO related to automatic definition of mapping methods FIXME:mapping
         self._mappings = {
-            "group": GroupMapping(),
-            "color": ColorMapping(),
-            "facecolor": ColorMapping(),
-            "edgecolor": ColorMapping(),
-            "marker": MarkerMapping(),
-            "dash": DashMapping(),
+            "group": GroupMapping(),  # TODO FIXME:mapping
+            "color": ColorSemantic(),
+            "facecolor": ColorSemantic(),
+            "edgecolor": ColorSemantic(),
+            "marker": MarkerSemantic(),
+            "dash": DashSemantic(),
         }
 
         # TODO is using "unknown" here the best approach?
@@ -271,7 +272,7 @@ class Plot:
         # If we do ... maybe we don't even need to write these methods, but can
         # instead programatically add them based on central dict of mapping objects.
         # ALSO TODO should these be initialized with defaults?
-        self._mappings["color"] = ColorMapping(palette)
+        self._mappings["color"] = ColorSemantic(palette)
         return self
 
     def map_facecolor(
@@ -279,7 +280,7 @@ class Plot:
         palette: PaletteSpec = None,
     ) -> Plot:
 
-        self._mappings["facecolor"] = ColorMapping(palette)
+        self._mappings["facecolor"] = ColorSemantic(palette)
         return self
 
     def map_edgecolor(
@@ -287,7 +288,7 @@ class Plot:
         palette: PaletteSpec = None,
     ) -> Plot:
 
-        self._mappings["edgecolor"] = ColorMapping(palette)
+        self._mappings["edgecolor"] = ColorSemantic(palette)
         return self
 
     def map_marker(
@@ -295,7 +296,7 @@ class Plot:
         shapes: list | dict | None = None,
     ) -> Plot:
 
-        self._mappings["marker"] = MarkerMapping(shapes)
+        self._mappings["marker"] = MarkerSemantic(shapes)
         return self
 
     def map_dash(
@@ -303,7 +304,7 @@ class Plot:
         styles: list | dict | None = None,
     ) -> Plot:
 
-        self._mappings["dash"] = DashMapping(styles)
+        self._mappings["dash"] = DashSemantic(styles)
         return self
 
     # TODO have map_gradient?
