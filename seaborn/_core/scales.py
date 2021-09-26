@@ -23,7 +23,7 @@ class ScaleWrapper:
     def __init__(
         self,
         scale: ScaleBase,
-        type: VariableType,  # TODO don't use builtin name?
+        type: VariableType | None = None,  # TODO don't use builtin name?
         norm: tuple[float | None, float | None] | Normalize | None = None,
     ):
 
@@ -32,7 +32,7 @@ class ScaleWrapper:
         self.reverse = transform.inverted().transform
 
         # TODO can't we get type from the scale object in most cases?
-        self.type = VarType(type)
+        self.type = type if type is None else VarType(type)
 
         if norm is None:
             norm = norm_from_scale(scale, norm)

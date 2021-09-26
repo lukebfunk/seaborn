@@ -195,7 +195,11 @@ class ColorSemantic(Semantic):
             levels, mapping = self._setup_categorical(
                 data, palette, order,
             )
-            return LookupMapping(mapping)
+            # return LookupMapping(mapping)
+            # TODO hack to keep things runnable until downstream refactor
+            mapping = LookupMapping(mapping)
+            mapping.levels = levels
+            return mapping
 
         elif map_type == "numeric":
 
