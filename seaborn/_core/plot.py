@@ -68,7 +68,7 @@ class Plot:
         # TODO see notes in _setup_mappings I think we're going to start with this
         # empty and define the defaults elsewhere
         # TODO related to automatic definition of mapping methods FIXME:mapping
-        self._mappings = {
+        self._semantics = {
             "group": GroupMapping(),  # TODO FIXME:mapping
             "color": ColorSemantic(),
             "facecolor": ColorSemantic(),
@@ -258,7 +258,7 @@ class Plot:
         # If we do ... maybe we don't even need to write these methods, but can
         # instead programatically add them based on central dict of mapping objects.
         # ALSO TODO should these be initialized with defaults?
-        self._mappings["color"] = ColorSemantic(palette)
+        self._semantics["color"] = ColorSemantic(palette)
         return self
 
     def map_facecolor(
@@ -266,7 +266,7 @@ class Plot:
         palette: PaletteSpec = None,
     ) -> Plot:
 
-        self._mappings["facecolor"] = ColorSemantic(palette)
+        self._semantics["facecolor"] = ColorSemantic(palette)
         return self
 
     def map_edgecolor(
@@ -274,7 +274,7 @@ class Plot:
         palette: PaletteSpec = None,
     ) -> Plot:
 
-        self._mappings["edgecolor"] = ColorSemantic(palette)
+        self._semantics["edgecolor"] = ColorSemantic(palette)
         return self
 
     def map_marker(
@@ -282,7 +282,7 @@ class Plot:
         shapes: list | dict | None = None,
     ) -> Plot:
 
-        self._mappings["marker"] = MarkerSemantic(shapes)
+        self._semantics["marker"] = MarkerSemantic(shapes)
         return self
 
     def map_dash(
@@ -290,7 +290,7 @@ class Plot:
         styles: list | dict | None = None,
     ) -> Plot:
 
-        self._mappings["dash"] = DashSemantic(styles)
+        self._semantics["dash"] = DashSemantic(styles)
         return self
 
     # TODO have map_gradient?
@@ -486,7 +486,8 @@ class Plot:
 
     def _setup_scales(self) -> None:
 
-        variables = set(self._data.frame)
+        variables = set(["x", "y"])
+        variables |= set(self._data.frame)
         for layer in self._layers:
             variables |= set(layer.data.frame)
 
@@ -494,13 +495,14 @@ class Plot:
             scale = self._scales.get(var, ScaleWrapper(mpl.scale.LinearScale(var)))
             var_type = scale.type
             if var_type is None:
-                values = [
+                all_values = [
                     self._data.frame.get(var),
                     # TODO important to check for var in x.variables, not just in x
                     # Because we only want to concat if a variable was *added* here
                     *(x.data.frame.get(var) for x in self._layers if var in x.variables)
                 ]
-                var_type = variable_type(pd.concat(values, ignore_index=True))
+                if any(x is not None for x in all_values):
+                    var_type = variable_type(pd.concat(all_values, ignore_index=True))
 
             # TODO eventually this will be updating a different dictionary
             # TODO do this as ScaleWrapper.from_wrapper(scale, var_type)?
@@ -508,19 +510,22 @@ class Plot:
 
     def _setup_mappings(self) -> None:
 
-        layers = self._layers
-
         # TODO we should setup default mappings here based on whether a mapping
         # variable appears in at least one of the layer data but isn't in self._mappings
         # Source of what mappings to check can be some dictionary of default mappings?
 
-        for var, mapping in self._mappings.items():
-            if any(var in layer for layer in layers):
-                all_data = pd.concat(
-                    [layer.data.frame.get(var) for layer in layers]
-                ).reset_index(drop=True)
+        self._mappings = {}
+        for var, semantic in self._semantics.items():
+            if any(var in layer for layer in self._layers):
+                all_values = pd.concat([
+                    self._data.frame.get(var),
+                    # TODO important to check for var in x.variables, not just in x
+                    # Because we only want to concat if a variable was *added* here
+                    # TODO note copy=pasted from setup_scales code!
+                    *(x.data.frame.get(var) for x in self._layers if var in x.variables)
+                ], ignore_index=True)
                 scale = self._scales.get(var)
-                self._mappings[var] = mapping.setup(all_data, scale)
+                self._mappings[var] = semantic.setup(all_values, scale)
 
     def _setup_orderings(self) -> None:
 
