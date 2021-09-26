@@ -251,6 +251,7 @@ class Plot:
         self,
         # TODO accept variable specification here?
         palette: PaletteSpec = None,
+        order: OrderSpec = None,
     ) -> Plot:
 
         # TODO we do some fancy business currently to avoid having to
@@ -258,39 +259,43 @@ class Plot:
         # If we do ... maybe we don't even need to write these methods, but can
         # instead programatically add them based on central dict of mapping objects.
         # ALSO TODO should these be initialized with defaults?
-        self._semantics["color"] = ColorSemantic(palette)
+        self._semantics["color"] = ColorSemantic(palette, order)
         return self
 
     def map_facecolor(
         self,
         palette: PaletteSpec = None,
+        order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["facecolor"] = ColorSemantic(palette)
+        self._semantics["facecolor"] = ColorSemantic(palette, order)
         return self
 
     def map_edgecolor(
         self,
         palette: PaletteSpec = None,
+        order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["edgecolor"] = ColorSemantic(palette)
+        self._semantics["edgecolor"] = ColorSemantic(palette, order)
         return self
 
     def map_marker(
         self,
         shapes: list | dict | None = None,
+        order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["marker"] = MarkerSemantic(shapes)
+        self._semantics["marker"] = MarkerSemantic(shapes, order)
         return self
 
     def map_dash(
         self,
         styles: list | dict | None = None,
+        order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["dash"] = DashSemantic(styles)
+        self._semantics["dash"] = DashSemantic(styles, order)
         return self
 
     # TODO have map_gradient?
@@ -531,10 +536,10 @@ class Plot:
 
         for var in variables:
             # TODO should the order be a property of the Semantic or the Mapping?
-            if var in self._mappings and self._mappings[var].levels is not None:
+            if var in self._mappings and self._mappings[var].order is not None:
                 # orderings[var] = self._mappings[var].order
                 # TODO FIXME:mappings mapping should always have order (can be None)
-                orderings[var] = self._mappings[var].levels
+                orderings[var] = self._mappings[var].order
             elif self._scales[var].order is not None:
                 orderings[var] = self._scales[var].order
 
@@ -853,7 +858,7 @@ class Plot:
 
         allow_empty = False  # TODO will need to recreate previous categorical plots
 
-        levels = {v: m.levels for v, m in mappings.items()}
+        levels = {v: m.order for v, m in mappings.items()}
         grouping_vars = [
             var for var in grouping_vars if var in df and var not in ["col", "row"]
         ]

@@ -23,7 +23,7 @@ class ScaleWrapper:
     def __init__(
         self,
         scale: ScaleBase,
-        type: VariableType | None = None,  # TODO don't use builtin name?
+        type: VariableType,  # TODO don't use builtin name?
         norm: tuple[float | None, float | None] | Normalize | None = None,
     ):
 

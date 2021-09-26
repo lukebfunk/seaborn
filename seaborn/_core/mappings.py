@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from pandas import Series
     from matplotlib.colors import Colormap, Normalize
     from matplotlib.scale import Scale
-    from seaborn._core.typing import PaletteSpec
+    from seaborn._core.typing import PaletteSpec, OrderSpec
 
     DashPattern = Tuple[float, ...]
     DashPatternWithOffset = Tuple[float, Optional[DashPattern]]
@@ -51,7 +51,13 @@ class DiscreteSemantic(Semantic):
     ) -> LookupMapping:
 
         provided = self._provided
-        order = None if scale is None else scale.order
+        if self.order is not None:
+            order = self.order
+        elif scale is not None:
+            order = scale.order
+        else:
+            order = None
+
         levels = categorical_order(data, order)
 
         if provided is None:
@@ -139,9 +145,10 @@ class FillSemantic(BinarySemantic):
 
 class ColorSemantic(Semantic):
 
-    def __init__(self, palette: PaletteSpec = None):
+    def __init__(self, palette: PaletteSpec = None, order: OrderSpec = None):
 
         self._palette = palette
+        self.order = order
 
     def __call__(self, x):  # TODO types; will need to overload
 
@@ -181,8 +188,15 @@ class ColorSemantic(Semantic):
         palette: PaletteSpec = self._palette
         cmap: Colormap | None = None
 
+        # TODO allow configuration of norm in mapping methods like we do with order?
         norm = None if scale is None else scale.norm
-        order = None if scale is None else scale.order
+
+        if self.order is not None:
+            order = self.order
+        elif scale is not None:
+            order = scale.order
+        else:
+            order = None
 
         # TODO We need to add some input checks ...
         # e.g. specifying a numeric scale and a qualitative colormap should fail nicely.
@@ -198,7 +212,7 @@ class ColorSemantic(Semantic):
             # return LookupMapping(mapping)
             # TODO hack to keep things runnable until downstream refactor
             mapping = LookupMapping(mapping)
-            mapping.levels = levels
+            mapping.order = levels  # TODO
             return mapping
 
         elif map_type == "numeric":
@@ -282,7 +296,8 @@ class MarkerSemantic(DiscreteSemantic):
     # TODO This may have to be a parameters? (e.g. for color/edgecolor)
     _semantic = "marker"
 
-    def __init__(self, shapes: list | dict | None = None):  # TODO full types
+    # TODO full types
+    def __init__(self, shapes: list | dict | None = None, order: OrderSpec = None):
 
         # TODO fill or filled parameter?
         # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
@@ -294,6 +309,7 @@ class MarkerSemantic(DiscreteSemantic):
             shapes = {k: MarkerStyle(v) for k, v in shapes.items()}
 
         self._provided = shapes
+        self.order = order
 
     def _default_values(self, n):  # TODO or have this as an infinite generator?
         """Build an arbitrarily long list of unique marker styles for points.
@@ -345,7 +361,7 @@ class DashSemantic(DiscreteSemantic):
 
     _semantic = "dash pattern"
 
-    def __init__(self, styles: list | dict | None = None):  # TODO full types
+    def __init__(self, styles: list | dict | None = None, order: OrderSpec = None):  # TODO full types
 
         # TODO fill or filled parameter?
         # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
@@ -357,6 +373,7 @@ class DashSemantic(DiscreteSemantic):
             styles = {k: self._get_dash_pattern(v) for k, v in styles.items()}
 
         self._provided = styles
+        self.order = order
 
     def _default_values(self, n: int) -> list[DashPatternWithOffset]:
         """Build an arbitrarily long list of unique dash styles for lines.
@@ -526,7 +543,7 @@ class SemanticMapping:
 class GroupMapping(SemanticMapping):  # TODO only needed for levels...
     """Mapping that does not alter any visual properties of the artists."""
     def setup(self, data: Series, scale: Scale | None = None) -> GroupMapping:
-        self.levels = categorical_order(data)
+        self.order = categorical_order(data)
         return self
 
 
