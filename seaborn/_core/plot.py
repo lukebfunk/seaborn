@@ -34,11 +34,16 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure, SubFigure
     from matplotlib.scale import ScaleBase
-    from matplotlib.colors import Normalize
     from seaborn._core.mappings import SemanticMapping
     from seaborn._marks.base import Mark
     from seaborn._stats.base import Stat
-    from seaborn._core.typing import DataSource, PaletteSpec, VariableSpec, OrderSpec
+    from seaborn._core.typing import (
+        DataSource,
+        PaletteSpec,
+        VariableSpec,
+        OrderSpec,
+        NormSpec,
+    )
 
 
 class Plot:
@@ -200,6 +205,10 @@ class Plot:
         for axis in "xy":
             keys = []
             for i, col in enumerate(pairspec.get(axis, [])):
+                # TODO note that this assumes no variables are defined as {axis}{digit}
+                # This could be a slight problem as matplotlib occasionally uses that
+                # format for artists that take multiple parameters on each axis.
+                # Perhaps we should set the internal pair variables to "_{axis}{index}"?
                 key = f"{axis}{i}"
                 keys.append(key)
                 pairspec["variables"][key] = col
@@ -252,6 +261,7 @@ class Plot:
         # TODO accept variable specification here?
         palette: PaletteSpec = None,
         order: OrderSpec = None,
+        norm: NormSpec = None,
     ) -> Plot:
 
         # TODO we do some fancy business currently to avoid having to
@@ -259,25 +269,39 @@ class Plot:
         # If we do ... maybe we don't even need to write these methods, but can
         # instead programatically add them based on central dict of mapping objects.
         # ALSO TODO should these be initialized with defaults?
-        self._semantics["color"] = ColorSemantic(palette, order)
+        self._semantics["color"] = ColorSemantic(palette)
+        if order is not None:
+            self.scale_categorical("color", order=order)
+        elif norm is not None:
+            self.scale_numeric("color", norm=norm)
         return self
 
     def map_facecolor(
         self,
         palette: PaletteSpec = None,
         order: OrderSpec = None,
+        norm: NormSpec = None,
     ) -> Plot:
 
-        self._semantics["facecolor"] = ColorSemantic(palette, order)
+        self._semantics["facecolor"] = ColorSemantic(palette)
+        if order is not None:
+            self.scale_categorical("facecolor", order=order)
+        elif norm is not None:
+            self.scale_numeric("facecolor", norm=norm)
         return self
 
     def map_edgecolor(
         self,
         palette: PaletteSpec = None,
         order: OrderSpec = None,
+        norm: NormSpec = None,
     ) -> Plot:
 
-        self._semantics["edgecolor"] = ColorSemantic(palette, order)
+        self._semantics["edgecolor"] = ColorSemantic(palette)
+        if order is not None:
+            self.scale_categorical("edgecolor", order=order)
+        elif norm is not None:
+            self.scale_numeric("edgecolor", norm=norm)
         return self
 
     def map_marker(
@@ -286,7 +310,9 @@ class Plot:
         order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["marker"] = MarkerSemantic(shapes, order)
+        self._semantics["marker"] = MarkerSemantic(shapes)
+        if order is not None:
+            self.scale_categorical("marker", order=order)
         return self
 
     def map_dash(
@@ -295,7 +321,9 @@ class Plot:
         order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["dash"] = DashSemantic(styles, order)
+        self._semantics["dash"] = DashSemantic(styles)
+        if order is not None:
+            self.scale_categorical("dash", order=order)
         return self
 
     # TODO have map_gradient?
@@ -311,7 +339,7 @@ class Plot:
         self,
         var: str,
         scale: str | ScaleBase = "linear",
-        norm: tuple[float | None, float | None] | Normalize | None = None,
+        norm: NormSpec = None,
         **kwargs
     ) -> Plot:
 
@@ -721,22 +749,17 @@ class Plot:
         df: DataFrame,
     ) -> DataFrame:
 
-        # TODO note that this assumes no variables are defined as {axis}{digit}
-        # This could be a slight problem as matplotlib occasionally uses that
-        # format for artists that take multiple parameters on each axis.
-        # Perhaps we should set the internal pair variables to "_{axis}{index}"?
         coord_cols = [c for c in df if re.match(r"^[xy]\D*$", c)]
-        drop_cols = [c for c in df if re.match(r"^[xy]\d", c)]
 
         out_df = (
             df
             .copy(deep=False)
-            .drop(coord_cols + drop_cols, axis=1)
+            .drop(coord_cols, axis=1)
             .reindex(df.columns, axis=1)  # So unscaled columns retain their place
         )
 
         for subplot in subplots:
-            axes_df = self._get_subplot_data(df, subplot)[coord_cols]
+            axes_df = self._filter_subplot_data(df, subplot)[coord_cols]
             with pd.option_context("mode.use_inf_as_null", True):
                 axes_df = axes_df.dropna()
             self._scale_coords_single(axes_df, out_df, scales, subplot["ax"])
@@ -752,18 +775,18 @@ class Plot:
     ) -> None:
 
         # TODO modify out_df in place or return and handle externally?
-        for var, values in coord_df.items():
+        for axis, values in coord_df.items():
 
             # TODO Explain the logic of this method thoroughly
             # It is clever, but a bit confusing!
 
-            axis = var[0]
-            m = re.match(r"^([xy]\d*).*$", var)  # TODO no longer necessary given _generate_pairings?
-            prefix = m.group(1)
-
             scale = scales[axis]
             axis_obj = getattr(ax, f"{axis}axis")
 
+            # TODO this is no longer valid with the way the semantic order overrides
+            # Perhaps better to have the scale always be the source of the order info
+            # but have a step where the order specified in the mapping overrides it?
+            # Alternately, use self._orderings here?
             if scale.order is not None:
                 values = values[values.isin(scale.order)]
 
@@ -772,8 +795,10 @@ class Plot:
             values = scale.cast(values)
             axis_obj.update_units(categorical_order(values))
 
-            scaled = scale.forward(axis_obj.convert_units(values))
-            out_df.loc[values.index, var] = scaled
+            # TODO it seems wrong that we need to cast to float here,
+            # but convert_units sometimes outputs an object array (e.g. w/Int64 values)
+            scaled = scale.forward(axis_obj.convert_units(values).astype(float))
+            out_df.loc[values.index, axis] = scaled
 
     def _unscale_coords(
         self,
@@ -836,7 +861,7 @@ class Plot:
 
             yield subplots, scales, df.assign(**reassignments)
 
-    def _get_subplot_data(  # TODO FIXME:names maybe _filter_subplot_data?
+    def _filter_subplot_data(  # TODO FIXME:names maybe _filter_subplot_data?
         self,
         df: DataFrame,
         subplot: dict,
@@ -868,7 +893,7 @@ class Plot:
 
             for subplot in subplots:
 
-                axes_df = self._get_subplot_data(df, subplot)
+                axes_df = self._filter_subplot_data(df, subplot)
 
                 subplot_keys = {}
                 for dim in ["col", "row"]:

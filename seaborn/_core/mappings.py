@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from pandas import Series
     from matplotlib.colors import Colormap, Normalize
     from matplotlib.scale import Scale
-    from seaborn._core.typing import PaletteSpec, OrderSpec
+    from seaborn._core.typing import PaletteSpec
 
     DashPattern = Tuple[float, ...]
     DashPatternWithOffset = Tuple[float, Optional[DashPattern]]
@@ -51,13 +51,7 @@ class DiscreteSemantic(Semantic):
     ) -> LookupMapping:
 
         provided = self._provided
-        if self.order is not None:
-            order = self.order
-        elif scale is not None:
-            order = scale.order
-        else:
-            order = None
-
+        order = None if scale is None else scale.order
         levels = categorical_order(data, order)
 
         if provided is None:
@@ -145,10 +139,9 @@ class FillSemantic(BinarySemantic):
 
 class ColorSemantic(Semantic):
 
-    def __init__(self, palette: PaletteSpec = None, order: OrderSpec = None):
+    def __init__(self, palette: PaletteSpec = None):
 
         self._palette = palette
-        self.order = order
 
     def __call__(self, x):  # TODO types; will need to overload
 
@@ -190,13 +183,7 @@ class ColorSemantic(Semantic):
 
         # TODO allow configuration of norm in mapping methods like we do with order?
         norm = None if scale is None else scale.norm
-
-        if self.order is not None:
-            order = self.order
-        elif scale is not None:
-            order = scale.order
-        else:
-            order = None
+        order = None if scale is None else scale.order
 
         # TODO We need to add some input checks ...
         # e.g. specifying a numeric scale and a qualitative colormap should fail nicely.
@@ -297,7 +284,7 @@ class MarkerSemantic(DiscreteSemantic):
     _semantic = "marker"
 
     # TODO full types
-    def __init__(self, shapes: list | dict | None = None, order: OrderSpec = None):
+    def __init__(self, shapes: list | dict | None = None):
 
         # TODO fill or filled parameter?
         # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
@@ -309,7 +296,6 @@ class MarkerSemantic(DiscreteSemantic):
             shapes = {k: MarkerStyle(v) for k, v in shapes.items()}
 
         self._provided = shapes
-        self.order = order
 
     def _default_values(self, n):  # TODO or have this as an infinite generator?
         """Build an arbitrarily long list of unique marker styles for points.
@@ -361,7 +347,7 @@ class DashSemantic(DiscreteSemantic):
 
     _semantic = "dash pattern"
 
-    def __init__(self, styles: list | dict | None = None, order: OrderSpec = None):  # TODO full types
+    def __init__(self, styles: list | dict | None = None):  # TODO full types
 
         # TODO fill or filled parameter?
         # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
@@ -373,7 +359,6 @@ class DashSemantic(DiscreteSemantic):
             styles = {k: self._get_dash_pattern(v) for k, v in styles.items()}
 
         self._provided = styles
-        self.order = order
 
     def _default_values(self, n: int) -> list[DashPatternWithOffset]:
         """Build an arbitrarily long list of unique dash styles for lines.
