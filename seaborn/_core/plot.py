@@ -428,7 +428,7 @@ class Plot:
 
         # TODO this should be configurable
         if not self._figure.get_constrained_layout():
-            self._figure.tight_layout()
+            self._figure.set_tight_layout(True)
 
         # TODO many methods will (confusingly) have no effect if invoked after
         # Plot.plot is (manually) called. We should have some way of raising from
@@ -529,7 +529,22 @@ class Plot:
 
     def _setup_orderings(self) -> None:
 
-        ...
+        orderings = {}
+
+        variables = set(self._data.frame)
+        for layer in self._layers:
+            variables |= set(layer.data.frame)
+
+        for var in variables:
+            # TODO should the order be a property of the Semantic or the Mapping?
+            if var in self._mappings and self._mappings[var].levels is not None:
+                # orderings[var] = self._mappings[var].order
+                # TODO FIXME:mappings mapping should always have order (can be None)
+                orderings[var] = self._mappings[var].levels
+            elif self._scales[var].order is not None:
+                orderings[var] = self._scales[var].order
+
+        self._orderings = orderings
 
     def _setup_figure(self, pyplot: bool = False) -> None:
 
@@ -563,21 +578,22 @@ class Plot:
             ax = sub["ax"]
             for axis in "xy":
                 axis_key = sub[axis]
-                scale = self._scales[axis_key]._scale
-                if LooseVersion(mpl.__version__) < "3.4":
-                    # The ability to pass a BaseScale instance to Axes.set_{axis}scale
-                    # was added to matplotlib in version 3.4.0:
-                    # https://github.com/matplotlib/matplotlib/pull/19089
-                    # Workaround: use the scale name, which is restrictive only
-                    # if the user wants to define a custom scale.
-                    # Additionally, setting the scale after updating the units breaks
-                    # in some cases on older versions of matplotlib (with older pandas?)
-                    # so only do it if necessary.
-                    axis_obj = getattr(ax, f"{axis}axis")
-                    if axis_obj.get_scale() != scale.name:
-                        ax.set(**{f"{axis}scale": scale.name})
-                else:
-                    ax.set(**{f"{axis}scale": scale})
+                if axis_key in self._scales:
+                    scale = self._scales[axis_key]._scale
+                    if LooseVersion(mpl.__version__) < "3.4":
+                        # The ability to pass a BaseScale instance to
+                        # Axes.set_{axis}scale was added to matplotlib in version 3.4.0:
+                        # https://github.com/matplotlib/matplotlib/pull/19089
+                        # Workaround: use the scale name, which is restrictive only
+                        # if the user wants to define a custom scale.
+                        # Additionally, setting the scale after updating units breaks in
+                        # some cases on older versions of matplotlib (/ older pandas?)
+                        # so only do it if necessary.
+                        axis_obj = getattr(ax, f"{axis}axis")
+                        if axis_obj.get_scale() != scale.name:
+                            ax.set(**{f"{axis}scale": scale.name})
+                    else:
+                        ax.set(**{f"{axis}scale": scale})
 
         # --- Figure annotation
         for sub in subplots:
