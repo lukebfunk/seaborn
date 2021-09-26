@@ -656,9 +656,9 @@ class Plot:
         stat = layer.stat
 
         full_df = data.frame
-        for subplots, df, scales in self._generate_pairings(full_df):
+        for subplots, scales, df in self._generate_pairings(full_df):
 
-            df = self._scale_coords(subplots, df, scales)
+            df = self._scale_coords(subplots, scales, df)
 
             if stat is not None:
                 grouping_vars = stat.grouping_vars + default_grouping_vars
@@ -668,7 +668,7 @@ class Plot:
 
             # Our statistics happen on the scale we want, but then matplotlib is going
             # to re-handle the scaling, so we need to invert before handing off
-            df = self._unscale_coords(df, scales)
+            df = self._unscale_coords(scales, df)
 
             grouping_vars = mark.grouping_vars + default_grouping_vars
             generate_splits = self._setup_split_generator(
@@ -709,8 +709,12 @@ class Plot:
         df = df.reset_index(drop=True)  # TODO not always needed, can we limit?
         return df
 
-    def _scale_coords(self, subplots: list[dict], df: DataFrame, scales: dict[str, ScaleWrapper]) -> DataFrame:
-        # TODO retype with a SubplotSpec or similar
+    def _scale_coords(
+        self,
+        subplots: list[dict],  # TODO retype with a SubplotSpec or similar
+        scales: dict[str, ScaleWrapper],  # TODO same idea, but ScaleSpec
+        df: DataFrame,
+    ) -> DataFrame:
 
         # TODO note that this assumes no variables are defined as {axis}{digit}
         # This could be a slight problem as matplotlib occasionally uses that
@@ -735,7 +739,11 @@ class Plot:
         return out_df
 
     def _scale_coords_single(
-        self, coord_df: DataFrame, out_df: DataFrame, scales: dict[str, ScaleWrapper], ax: Axes
+        self,
+        coord_df: DataFrame,
+        out_df: DataFrame,
+        scales: dict[str, ScaleWrapper],
+        ax: Axes,
     ) -> None:
 
         # TODO modify out_df in place or return and handle externally?
@@ -762,7 +770,11 @@ class Plot:
             scaled = scale.forward(axis_obj.convert_units(values))
             out_df.loc[values.index, var] = scaled
 
-    def _unscale_coords(self, df: DataFrame, scales: dict[str, ScaleWrapper]) -> DataFrame:
+    def _unscale_coords(
+        self,
+        scales: dict[str, ScaleWrapper],
+        df: DataFrame
+    ) -> DataFrame:
 
         # Note this is now different from what's in scale_coords as the dataframe
         # that comes into this method will have pair columns reassigned to x/y
@@ -783,13 +795,13 @@ class Plot:
     def _generate_pairings(
         self,
         df: DataFrame
-    ) -> Generator[tuple[list[dict], DataFrame], None, None]:
+    ) -> Generator[tuple[list[dict], dict[str, ScaleWrapper], DataFrame], None, None]:
         # TODO retype return with SubplotSpec or similar
 
         pair_variables = self._pairspec.get("structure", {})
 
         if not pair_variables:
-            yield list(self._subplots), df, self._scales
+            yield self._subplots, self._scales, df
             return
 
         iter_axes = itertools.product(*[
@@ -797,6 +809,16 @@ class Plot:
         ])
 
         for x, y in iter_axes:
+
+            subplots = []
+            for sub in self._subplots:
+                if (x is None or sub["x"] == x) and (y is None or sub["y"] == y):
+                    subplots.append(sub)
+
+            scales = {
+                "x": self._scales.get("x" if x is None else x),
+                "y": self._scales.get("y" if y is None else y),
+            }
 
             reassignments = {}
             for axis, prefix in zip("xy", [x, y]):
@@ -807,17 +829,7 @@ class Plot:
                         for col in df if col.startswith(prefix)
                     })
 
-            subplots = []
-            for sub in self._subplots:
-                if (x is None or sub["x"] == x) and (y is None or sub["y"] == y):
-                    subplots.append(sub)
-
-            scales = {
-                "x": self._scales.get("x") if x is None else self._scales.get(x),
-                "y": self._scales.get("y") if y is None else self._scales.get(y),
-            }
-
-            yield subplots, df.assign(**reassignments), scales
+            yield subplots, scales, df.assign(**reassignments)
 
     def _get_subplot_data(  # TODO FIXME:names maybe _filter_subplot_data?
         self,
