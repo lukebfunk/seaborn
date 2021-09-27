@@ -282,7 +282,7 @@ class TestColor:
         cmap = color_palette("mako", as_cmap=True)
         m = ColorSemantic(palette=cmap).setup(num_vector)
         expected_colors = cmap(num_norm(num_vector.to_numpy()))[:, :3]
-        assert_array_equal(m(num_vector), expected_colors)
+        assert_array_equal(m(num_vector.to_numpy()), expected_colors)
 
     def test_bad_palette(self, num_vector):
 
