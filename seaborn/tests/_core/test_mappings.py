@@ -6,6 +6,7 @@ from matplotlib.colors import Normalize, to_rgb
 
 import pytest
 from numpy.testing import assert_array_equal
+from pandas.testing import assert_series_equal
 
 # TODO from seaborn._compat import MarkerStyle
 from seaborn._compat import MarkerStyle
@@ -65,13 +66,9 @@ class TestColor:
 
         palette = "Blues"
         m = ColorSemantic(palette=palette).setup(cat_vector)
-        assert m.palette == palette
-        assert m.levels == cat_order
 
-        expected = dict(
-            zip(cat_order, color_palette(palette, len(cat_order)))
-        )
-
+        colors = color_palette(palette, len(cat_order))
+        expected = dict(zip(cat_order, colors))
         for level, color in expected.items():
             assert m(level) == color
 
@@ -79,10 +76,8 @@ class TestColor:
 
         palette = color_palette("Reds", len(cat_order))
         m = ColorSemantic(palette=palette).setup(cat_vector)
-        assert m.palette == palette
 
         expected = dict(zip(cat_order, palette))
-
         for level, color in expected.items():
             assert m(level) == color
 
@@ -90,10 +85,8 @@ class TestColor:
 
         palette = color_palette("Reds", len(num_order))
         m = ColorSemantic(palette=palette).setup(num_vector)
-        assert m.palette == palette
 
         expected = dict(zip(num_order, palette))
-
         for level, color in expected.items():
             assert m(level) == color
 
@@ -101,7 +94,7 @@ class TestColor:
 
         palette = dict(zip(cat_order, color_palette("Greens")))
         m = ColorSemantic(palette=palette).setup(cat_vector)
-        assert m.palette == palette
+        assert m.mapping == palette
 
         for level, color in palette.items():
             assert m(level) == color
@@ -110,7 +103,7 @@ class TestColor:
 
         palette = dict(zip(num_order, color_palette("Greens")))
         m = ColorSemantic(palette=palette).setup(num_vector)
-        assert m.palette == palette
+        assert m.mapping == palette
 
         for level, color in palette.items():
             assert m(level) == color
@@ -136,7 +129,6 @@ class TestColor:
         colors = color_palette(palette, len(cat_order))
 
         m = ColorSemantic(palette=palette).setup(cat_vector, scale)
-        assert m.levels == cat_order
 
         expected = dict(zip(cat_order, colors))
 
@@ -151,7 +143,6 @@ class TestColor:
         colors = color_palette(palette, len(num_order))
 
         m = ColorSemantic(palette=palette).setup(num_vector, scale)
-        assert m.levels == num_order
 
         expected = dict(zip(num_order, colors))
 
@@ -171,7 +162,6 @@ class TestColor:
         colors = color_palette(palette, len(order))
 
         m = ColorSemantic(palette=palette).setup(num_vector, scale)
-        assert m.levels == order
 
         expected = dict(zip(order, colors))
 
@@ -230,14 +220,14 @@ class TestColor:
         x = pd.Series(["a", "b", "c"])
         colors = color_palette(n_colors=len(x))
         m = ColorSemantic().setup(x)
-        assert_array_equal(m(x), np.stack(colors))
+        assert_series_equal(m(x), pd.Series(colors))
 
     def test_categorical_multi_lookup_categorical(self):
 
         x = pd.Series(["a", "b", "c"]).astype("category")
         colors = color_palette(n_colors=len(x))
         m = ColorSemantic().setup(x)
-        assert_array_equal(m(x), np.stack(colors))
+        assert_series_equal(m(x), pd.Series(colors))
 
     def test_numeric_default_palette(self, num_vector, num_order, num_norm):
 
@@ -383,14 +373,6 @@ class TestDash:
         with pytest.raises(ValueError, match=err):
             m.setup(keys)
 
-    def test_provided_list_too_short(self):
-
-        m = DashSemantic(["-", "dashed"])
-        keys = pd.Series(["a", "b", "c"])
-        msg = r"The dash pattern list has fewer values \(2\) than needed \(3\)"
-        with pytest.warns(UserWarning, match=msg):
-            m.setup(keys)
-
 
 class TestMarker:
 
@@ -467,12 +449,4 @@ class TestMarker:
         keys = pd.Series(["a", 1])
         err = r"Missing marker for following value\(s\): 1, 'a'"
         with pytest.raises(ValueError, match=err):
-            m.setup(keys)
-
-    def test_provided_list_too_short(self):
-
-        m = MarkerSemantic(["o", "s"])
-        keys = pd.Series(["a", "b", "c"])
-        msg = r"The marker list has fewer values \(2\) than needed \(3\)"
-        with pytest.warns(UserWarning, match=msg):
             m.setup(keys)

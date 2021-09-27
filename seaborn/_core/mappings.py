@@ -9,7 +9,7 @@ from matplotlib.colors import to_rgb
 
 from seaborn._compat import MarkerStyle
 from seaborn._core.rules import VarType, variable_type, categorical_order
-from seaborn.utils import get_color_cycle, remove_na
+from seaborn.utils import get_color_cycle
 from seaborn.palettes import QUAL_PALETTES, color_palette
 
 from typing import TYPE_CHECKING
@@ -176,7 +176,7 @@ class ColorSemantic(Semantic):
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
-    ) -> ColorMapping:
+    ) -> LookupMapping | NormedMapping:
         """Infer the type of mapping to use and define it using this vector of data."""
         palette: PaletteSpec = self._palette
         cmap: Colormap | None = None
@@ -192,20 +192,17 @@ class ColorSemantic(Semantic):
 
         if map_type == "categorical":
 
-            # TODO what are we doing with levels now?
-            levels, mapping = self._setup_categorical(
-                data, palette, order,
-            )
+            mapping = self._setup_categorical(data, palette, order)
             return LookupMapping(mapping)
 
         elif map_type == "numeric":
 
-            # TODO
-
             data = pd.to_numeric(data)
-            levels, dictionary, norm, cmap = self._setup_numeric(
-                data, palette, norm,
-            )
+            mapping, norm, transform = self._setup_numeric(data, palette, norm)
+            if mapping is not None:
+                # TODO See comments in _setup_numeric about deprecation of this
+                return LookupMapping(mapping)
+            return NormedMapping(norm, transform)
 
         # --- Option 3: datetime mapping
 
@@ -245,6 +242,9 @@ class ColorSemantic(Semantic):
 
         # -- Identify the set of colors to use
 
+        # TODO update the checks in here to use new common checks
+        # (including warning rather than raising on list palettes)
+
         if isinstance(palette, dict):
 
             missing = set(levels) - set(palette)
@@ -252,7 +252,7 @@ class ColorSemantic(Semantic):
                 err = "The palette dictionary is missing keys: {}"
                 raise ValueError(err.format(missing))
 
-            dictionary = palette
+            mapping = palette
 
         else:
 
@@ -269,9 +269,64 @@ class ColorSemantic(Semantic):
             else:
                 colors = color_palette(palette, n_colors)
 
-            dictionary = dict(zip(levels, colors))
+            mapping = dict(zip(levels, colors))
 
-        return levels, dictionary
+        return mapping
+
+    def _setup_numeric(
+        self,
+        data: Series,
+        palette: PaletteSpec,
+        norm: Normalize | None,
+    ) -> tuple[list, dict, Normalize | None, Colormap]:
+        """Determine colors when the variable is quantitative."""
+        cmap: Colormap
+        if isinstance(palette, dict):
+
+            # In the function interface, the presence of a norm object overrides
+            # a dictionary of colors to specify a numeric mapping, so we need
+            # to process it here.
+            # TODO this functionality only exists to support the old relplot
+            # hack for linking hue orders across facets.  We don't need that any
+            # more and should probably remove this, but needs deprecation.
+            # (Also what should new behavior be? I think an error probably).
+            colors = [palette[k] for k in sorted(palette)]
+            cmap = mpl.colors.ListedColormap(colors)
+            mapping = palette.copy()
+
+        else:
+
+            # --- Sort out the colormap to use from the palette argument
+
+            # Default numeric palette is our default cubehelix palette
+            # TODO do we want to do something complicated to ensure contrast?
+            palette = "ch:" if palette is None else palette
+
+            if isinstance(palette, mpl.colors.Colormap):
+                cmap = palette
+            else:
+                cmap = color_palette(palette, as_cmap=True)
+
+            # Now sort out the data normalization
+            # TODO consolidate in ScaleWrapper so we always have a norm here?
+            if norm is None:
+                norm = mpl.colors.Normalize()
+            elif isinstance(norm, tuple):
+                norm = mpl.colors.Normalize(*norm)
+            elif not isinstance(norm, mpl.colors.Normalize):
+                err = "`norm` must be None, tuple, or Normalize object."
+                raise ValueError(err)
+            norm.autoscale_None(data.dropna())
+            mapping = None
+
+        def rgb_transform(x):
+            rgba = cmap(x)
+            if isinstance(rgba, tuple):
+                return to_rgb(rgba)
+            else:
+                return rgba[..., :3]
+
+        return mapping, norm, rgb_transform
 
 
 class MarkerSemantic(DiscreteSemantic):
@@ -491,8 +546,6 @@ class NormedMapping(SemanticMapping):
 class SemanticMapping:
     """Base class for mappings between data and visual attributes."""
 
-    levels: list  # TODO Alternately, use keys of dictionary?
-
     def setup(self, data: Series, scale: Scale | None) -> SemanticMapping:
         # TODO why not just implement the GroupMapping setup() here?
         raise NotImplementedError()
@@ -520,63 +573,3 @@ class SemanticMapping:
 # Also if __init__ is just going to store information, can we abstract that in
 # a nice way while also having a method with a signature/docstring we can use to
 # attach map_{semantic} methods to Plot?
-
-
-# Alt name RGBAMapping
-class ColorMapping(SemanticMapping):
-    """Mapping that sets artist colors according to data values."""
-
-    # TODO type the important class attributes here
-
-    def _setup_numeric(
-        self,
-        data: Series,
-        palette: PaletteSpec,
-        norm: Normalize | None,
-    ) -> tuple[list, dict, Normalize | None, Colormap]:
-        """Determine colors when the variable is quantitative."""
-        cmap: Colormap
-        if isinstance(palette, dict):
-
-            # In the function interface, the presence of a norm object overrides
-            # a dictionary of colors to specify a numeric mapping, so we need
-            # to process it here.
-            # TODO this functionality only exists to support the old relplot
-            # hack for linking hue orders across facets.  We don't need that any
-            # more and should probably remove this, but needs deprecation.
-            # (Also what should new behavior be? I think an error probably).
-            levels = list(sorted(palette))
-            colors = [palette[k] for k in sorted(palette)]
-            cmap = mpl.colors.ListedColormap(colors)
-            dictionary = palette.copy()
-
-        else:
-
-            # The levels are the sorted unique values in the data
-            levels = list(np.sort(remove_na(data.unique())))
-
-            # --- Sort out the colormap to use from the palette argument
-
-            # Default numeric palette is our default cubehelix palette
-            # TODO do we want to do something complicated to ensure contrast?
-            palette = "ch:" if palette is None else palette
-
-            if isinstance(palette, mpl.colors.Colormap):
-                cmap = palette
-            else:
-                cmap = color_palette(palette, as_cmap=True)
-
-            # Now sort out the data normalization
-            # TODO consolidate in ScaleWrapper so we always have a norm here?
-            if norm is None:
-                norm = mpl.colors.Normalize()
-            elif isinstance(norm, tuple):
-                norm = mpl.colors.Normalize(*norm)
-            elif not isinstance(norm, mpl.colors.Normalize):
-                err = "`norm` must be None, tuple, or Normalize object."
-                raise ValueError(err)
-            norm.autoscale_None(data.dropna())
-
-            dictionary = dict(zip(levels, cmap(norm(levels))))
-
-        return levels, dictionary, norm, cmap
