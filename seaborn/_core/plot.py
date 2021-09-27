@@ -14,7 +14,6 @@ from seaborn._core.rules import categorical_order, variable_type
 from seaborn._core.data import PlotData
 from seaborn._core.subplots import Subplots
 from seaborn._core.mappings import (
-    GroupMapping,
     ColorSemantic,
     MarkerSemantic,
     DashSemantic,
@@ -74,7 +73,6 @@ class Plot:
         # empty and define the defaults elsewhere
         # TODO related to automatic definition of mapping methods FIXME:mapping
         self._semantics = {
-            "group": GroupMapping(),  # TODO FIXME:mapping
             "color": ColorSemantic(),
             "facecolor": ColorSemantic(),
             "edgecolor": ColorSemantic(),
@@ -452,7 +450,6 @@ class Plot:
         self._setup_data()
         self._setup_scales()
         self._setup_mappings()
-        self._setup_orderings()
         self._setup_figure(pyplot)
 
         for layer in self._layers:
@@ -553,25 +550,6 @@ class Plot:
                 ], ignore_index=True)
                 scale = self._scales.get(var)
                 self._mappings[var] = semantic.setup(all_values, scale)
-
-    def _setup_orderings(self) -> None:
-
-        orderings = {}
-
-        variables = set(self._data.frame)
-        for layer in self._layers:
-            variables |= set(layer.data.frame)
-
-        for var in variables:
-            # TODO should the order be a property of the Semantic or the Mapping?
-            if var in self._mappings and self._mappings[var].order is not None:
-                # orderings[var] = self._mappings[var].order
-                # TODO FIXME:mappings mapping should always have order (can be None)
-                orderings[var] = self._mappings[var].order
-            elif self._scales[var].order is not None:
-                orderings[var] = self._scales[var].order
-
-        self._orderings = orderings
 
     def _setup_figure(self, pyplot: bool = False) -> None:
 
@@ -883,11 +861,15 @@ class Plot:
 
         allow_empty = False  # TODO will need to recreate previous categorical plots
 
-        levels = {v: m.order for v, m in mappings.items()}
+        grouping_keys = []
         grouping_vars = [
-            var for var in grouping_vars if var in df and var not in ["col", "row"]
+            v for v in grouping_vars if v in df and v not in ["col", "row"]
         ]
-        grouping_keys = [levels.get(var, []) for var in grouping_vars]
+        for var in grouping_vars:
+            order = self._scales[var].order
+            if order is None:
+                order = categorical_order(df[var])
+            grouping_keys.append(order)
 
         def generate_splits() -> Generator:
 

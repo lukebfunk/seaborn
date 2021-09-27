@@ -196,11 +196,7 @@ class ColorSemantic(Semantic):
             levels, mapping = self._setup_categorical(
                 data, palette, order,
             )
-            # return LookupMapping(mapping)
-            # TODO hack to keep things runnable until downstream refactor
-            mapping = LookupMapping(mapping)
-            mapping.order = levels  # TODO
-            return mapping
+            return LookupMapping(mapping)
 
         elif map_type == "numeric":
 
@@ -524,12 +520,6 @@ class SemanticMapping:
 # Also if __init__ is just going to store information, can we abstract that in
 # a nice way while also having a method with a signature/docstring we can use to
 # attach map_{semantic} methods to Plot?
-
-class GroupMapping(SemanticMapping):  # TODO only needed for levels...
-    """Mapping that does not alter any visual properties of the artists."""
-    def setup(self, data: Series, scale: Scale | None = None) -> GroupMapping:
-        self.order = categorical_order(data)
-        return self
 
 
 # Alt name RGBAMapping
