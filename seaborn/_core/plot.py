@@ -763,7 +763,7 @@ class Plot:
             # It is clever, but a bit confusing!
 
             scale = scales[axis]
-            axis_obj = getattr(ax, f"{axis}axis")
+            axis_obj = getattr(ax, f"{axis[0]}axis")
 
             # TODO this is no longer valid with the way the semantic order overrides
             # Perhaps better to have the scale always be the source of the order info
