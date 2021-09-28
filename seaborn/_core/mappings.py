@@ -2,7 +2,6 @@ from __future__ import annotations
 import itertools
 import warnings
 
-import numpy as np
 import pandas as pd
 import matplotlib as mpl
 from matplotlib.colors import to_rgb
@@ -24,14 +23,17 @@ if TYPE_CHECKING:
     DashPatternWithOffset = Tuple[float, Optional[DashPattern]]
 
 
-# TODO I think we want map_semantic to accept _order/_norm parameters.
-# But that forces some decisions:
-# - Which takes precedence? (i.e. .map_ vs .scale_)?
-# - Does Plot.map_ internally call self.scale_ or hand off to the Semantic?
-
-
 class Semantic:
-    ...
+
+    _semantic: str  # TODO or name?
+
+    def setup(
+        self,
+        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
+        scale: Scale | None = None,  # TODO or always have a Scale?
+    ) -> SemanticMapping:
+
+        raise NotImplementedError()
 
 
 class BinarySemantic(Semantic):
@@ -39,6 +41,8 @@ class BinarySemantic(Semantic):
 
 
 class DiscreteSemantic(Semantic):
+
+    _provided: list | dict | None
 
     def _default_values(self, n: int) -> list:
         """Return n unique values."""
@@ -107,7 +111,7 @@ class ContinuousSemantic(Semantic):
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
-    ) -> NormedMapping:
+    ):  # TODO reurn type
 
         values = self._values
         # norm = None if scale is None else scale.norm
@@ -133,44 +137,11 @@ class ContinuousSemantic(Semantic):
 # ==================================================================================== #
 
 
-class FillSemantic(BinarySemantic):
-    ...
-
-
 class ColorSemantic(Semantic):
 
     def __init__(self, palette: PaletteSpec = None):
 
         self._palette = palette
-
-    def __call__(self, x):  # TODO types; will need to overload
-
-        # TODO we are missing numeric maps and lots of other things
-        if isinstance(x, pd.Series):
-            if x.dtype.name == "category":  # TODO! possible pandas bug
-                x = x.astype(object)
-            # TODO where is best place to ensure that LUT values are rgba tuples?
-            return np.stack(x.map(self.dictionary).map(to_rgb))
-        else:
-            return to_rgb(self.dictionary[x])
-
-    def _infer_map_type(
-        self,
-        scale: Scale,
-        palette: PaletteSpec,
-        data: Series,
-    ) -> VarType:
-        """Determine how to implement the mapping."""
-        map_type: VarType
-        if scale is not None:
-            return scale.type
-        elif palette in QUAL_PALETTES:
-            map_type = VarType("categorical")
-        elif isinstance(palette, (dict, list)):
-            map_type = VarType("categorical")
-        else:
-            map_type = variable_type(data, boolean_type="categorical")
-        return map_type
 
     def setup(
         self,
@@ -178,8 +149,8 @@ class ColorSemantic(Semantic):
         scale: Scale | None = None,  # TODO or always have a Scale?
     ) -> LookupMapping | NormedMapping:
         """Infer the type of mapping to use and define it using this vector of data."""
+        mapping: LookupMapping | NormedMapping
         palette: PaletteSpec = self._palette
-        cmap: Colormap | None = None
 
         # TODO allow configuration of norm in mapping methods like we do with order?
         norm = None if scale is None else scale.norm
@@ -192,48 +163,30 @@ class ColorSemantic(Semantic):
 
         if map_type == "categorical":
 
-            mapping = self._setup_categorical(data, palette, order)
-            return LookupMapping(mapping)
+            mapping = LookupMapping(self._setup_categorical(data, palette, order))
 
         elif map_type == "numeric":
 
             data = pd.to_numeric(data)
-            mapping, norm, transform = self._setup_numeric(data, palette, norm)
-            if mapping is not None:
+            lookup, norm, transform = self._setup_numeric(data, palette, norm)
+            if lookup:
                 # TODO See comments in _setup_numeric about deprecation of this
-                return LookupMapping(mapping)
-            return NormedMapping(norm, transform)
-
-        # --- Option 3: datetime mapping
+                mapping = LookupMapping(lookup)
+            else:
+                mapping = NormedMapping(norm, transform)
 
         elif map_type == "datetime":
             # TODO this needs actual implementation
-            cmap = norm = None
-            levels, dictionary = self._setup_categorical(
-                # Casting data to list to handle differences in the way
-                # pandas and numpy represent datetime64 data
-                list(data), palette, order,
-            )
+            mapping = LookupMapping(self._setup_categorical(data, palette, order))
 
-        # TODO do we need to return and assign out here or can the
-        # type-specific methods do the assignment internally
-
-        # TODO I don't love how this is kind of a mish-mash of attributes
-        # Can we be more consistent across SemanticMapping subclasses?
-        self.dictionary = dictionary
-        self.palette = palette
-        self.levels = levels
-        self.norm = norm
-        self.cmap = cmap
-
-        return self
+        return mapping
 
     def _setup_categorical(
         self,
         data: Series,
         palette: PaletteSpec,
         order: list | None,
-    ) -> tuple[list, dict]:
+    ) -> dict[Any, tuple[float, float, float]]:
         """Determine colors when the mapping is categorical."""
         # -- Identify the order and name of the levels
 
@@ -278,7 +231,7 @@ class ColorSemantic(Semantic):
         data: Series,
         palette: PaletteSpec,
         norm: Normalize | None,
-    ) -> tuple[list, dict, Normalize | None, Colormap]:
+    ) -> tuple[dict, Normalize, Callable]:
         """Determine colors when the variable is quantitative."""
         cmap: Colormap
         if isinstance(palette, dict):
@@ -317,7 +270,7 @@ class ColorSemantic(Semantic):
                 err = "`norm` must be None, tuple, or Normalize object."
                 raise ValueError(err)
             norm.autoscale_None(data.dropna())
-            mapping = None
+            mapping = {}
 
         def rgb_transform(x):
             rgba = cmap(x)
@@ -327,6 +280,28 @@ class ColorSemantic(Semantic):
                 return rgba[..., :3]
 
         return mapping, norm, rgb_transform
+
+    def _infer_map_type(
+        self,
+        scale: Scale,
+        palette: PaletteSpec,
+        data: Series,
+    ) -> VarType:
+        """Determine how to implement the mapping."""
+        map_type: VarType
+        if scale is not None:
+            return scale.type
+        elif palette in QUAL_PALETTES:
+            map_type = VarType("categorical")
+        elif isinstance(palette, (dict, list)):
+            map_type = VarType("categorical")
+        else:
+            map_type = variable_type(data, boolean_type="categorical")
+        return map_type
+
+
+class FillSemantic(BinarySemantic):
+    ...
 
 
 class MarkerSemantic(DiscreteSemantic):
@@ -527,7 +502,7 @@ class LookupMapping(SemanticMapping):
 
 class NormedMapping(SemanticMapping):
 
-    def __init__(self, norm: Normalize, transform: Callable[float, Any]):
+    def __init__(self, norm: Normalize, transform: Callable):
 
         self.norm = norm
         self.transform = transform
@@ -539,37 +514,3 @@ class NormedMapping(SemanticMapping):
         # TODO note that matplotlib Normalize is going to return a masked array
         # maybe this is fine since we're handing the output off to matplotlib?
         return self.transform(self.norm(x))
-
-# ==================================================================================== #
-
-
-class SemanticMapping:
-    """Base class for mappings between data and visual attributes."""
-
-    def setup(self, data: Series, scale: Scale | None) -> SemanticMapping:
-        # TODO why not just implement the GroupMapping setup() here?
-        raise NotImplementedError()
-
-    def __call__(self, x):  # TODO types; will need to overload (wheee)
-        # TODO this is a hack to get things working
-        if isinstance(x, pd.Series):
-            if x.dtype.name == "category":  # TODO! possible pandas bug
-                x = x.astype(object)
-            # TODO where is best place to ensure that LUT values are rgba tuples?
-            # TODO may need to move below line to ColorMapping
-            # return np.stack(x.map(self.dictionary))
-            return x.map(self.dictionary)
-        else:
-            return self.dictionary[x]
-
-
-# TODO Currently, the SemanticMapping objects are also the source of the information
-# about the levels/order of the semantic variables. Do we want to decouple that?
-
-# TODO Perhaps the setup method should not add attributes and return self, but rather
-# return an object that is initialized to do the mapping. This would make it so that
-# Plotter._setup_mappings() won't mutate attributes on the Plot that generated it.
-# Think about this a bit more but I think it's the way forward. Decrease state!
-# Also if __init__ is just going to store information, can we abstract that in
-# a nice way while also having a method with a signature/docstring we can use to
-# attach map_{semantic} methods to Plot?

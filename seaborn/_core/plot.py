@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt  # TODO defer import into Plot.show()
 
-from seaborn._core.rules import categorical_order, variable_type
+from seaborn._core.rules import variable_type, categorical_order
 from seaborn._core.data import PlotData
 from seaborn._core.subplots import Subplots
 from seaborn._core.mappings import (
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure, SubFigure
     from matplotlib.scale import ScaleBase
-    from seaborn._core.mappings import SemanticMapping
+    from seaborn._core.mappings import Semantic, SemanticMapping
     from seaborn._marks.base import Mark
     from seaborn._stats.base import Stat
     from seaborn._core.typing import (
@@ -50,8 +50,9 @@ class Plot:
     _data: PlotData
     _layers: list[Layer]
     # TODO -> _semantics, have _mappings hold the objects returned from Semantic.setup?
+    _semantics: dict[str, Semantic]
     _mappings: dict[str, SemanticMapping]  # TODO keys as Literal, or use TypedDict?
-    _scales: dict[str, ScaleBase]
+    _scales: dict[str, ScaleWrapper]
 
     # TODO use TypedDict here
     _subplotspec: dict[str, Any]
@@ -120,6 +121,9 @@ class Plot:
         data: DataSource = None,
         **variables: VariableSpec,
     ) -> Plot:
+
+        # TODO FIXME:layer change the layer object to a simple dictionary,
+        # there's almost no logic in the class and it will make copy/update less awkward
 
         # TODO do a check here that mark has been initialized,
         # otherwise errors will be inscrutable
@@ -803,13 +807,17 @@ class Plot:
     def _generate_pairings(
         self,
         df: DataFrame
-    ) -> Generator[tuple[list[dict], dict[str, ScaleWrapper], DataFrame], None, None]:
+    ) -> Generator[
+        tuple[list[dict], dict[str, ScaleWrapper], DataFrame], None, None
+    ]:
         # TODO retype return with SubplotSpec or similar
 
         pair_variables = self._pairspec.get("structure", {})
 
         if not pair_variables:
-            yield self._subplots, self._scales, df
+            # TODO casting to list because subplots below is a list
+            # Maybe a cleaner way to do this?
+            yield list(self._subplots), self._scales, df
             return
 
         iter_axes = itertools.product(*[
@@ -823,10 +831,11 @@ class Plot:
                 if (x is None or sub["x"] == x) and (y is None or sub["y"] == y):
                     subplots.append(sub)
 
-            scales = {
-                "x": self._scales.get("x" if x is None else x),
-                "y": self._scales.get("y" if y is None else y),
-            }
+            scales = {}
+            for axis, prefix in zip("xy", [x, y]):
+                key = axis if prefix is None else prefix
+                if key in self._scales:
+                    scales[axis] = self._scales[key]
 
             reassignments = {}
             for axis, prefix in zip("xy", [x, y]):
@@ -947,14 +956,14 @@ class Plot:
 
 class Layer:
 
-    data = PlotData
+    data: PlotData
 
     def __init__(
         self,
         mark: Mark,
         stat: Stat | None,
         source: DataSource | None,
-        variables: VariableSpec | None,
+        variables: dict[str, VariableSpec],
     ):
 
         self.mark = mark
@@ -963,4 +972,6 @@ class Layer:
         self.variables = variables
 
     def __contains__(self, key: str) -> bool:
-        return key in self.data
+        if hasattr(self, "data"):
+            return key in self.data
+        return False
