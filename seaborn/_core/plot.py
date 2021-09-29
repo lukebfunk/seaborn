@@ -15,6 +15,7 @@ from seaborn._core.data import PlotData
 from seaborn._core.subplots import Subplots
 from seaborn._core.mappings import (
     ColorSemantic,
+    BooleanSemantic,
     MarkerSemantic,
     DashSemantic,
 )
@@ -79,6 +80,7 @@ class Plot:
             "edgecolor": ColorSemantic(),
             "marker": MarkerSemantic(),
             "dash": DashSemantic(),
+            "fill": BooleanSemantic(),
         }
 
         self._target = None
@@ -271,6 +273,8 @@ class Plot:
         # If we do ... maybe we don't even need to write these methods, but can
         # instead programatically add them based on central dict of mapping objects.
         # ALSO TODO should these be initialized with defaults?
+        # TODO if we define default semantics, we can use that
+        # for initialization and make this more abstract (assuming kwargs match?)
         self._semantics["color"] = ColorSemantic(palette)
         if order is not None:
             self.scale_categorical("color", order=order)
@@ -304,6 +308,17 @@ class Plot:
             self.scale_categorical("edgecolor", order=order)
         elif norm is not None:
             self.scale_numeric("edgecolor", norm=norm)
+        return self
+
+    def map_fill(
+        self,
+        values: list | dict | None = None,
+        order: OrderSpec = None,
+    ):
+
+        self._semantics["fill"] = BooleanSemantic(values)
+        if order is not None:
+            self.scale_categorical("fill", order=order)
         return self
 
     def map_marker(
@@ -413,6 +428,10 @@ class Plot:
         # use a reverse log scale, (but those are usually in units of years).
 
         return self
+
+    def scale_identity(self, var) -> Plot:
+
+        raise NotImplementedError("TODO")
 
     def theme(self) -> Plot:
 
@@ -535,6 +554,12 @@ class Plot:
 
             # TODO eventually this will be updating a different dictionary
             self._scales[var] = ScaleWrapper(mpl.scale.LinearScale(var), var_type)
+
+        # TODO Think about how this is going to handle situations where we have
+        # e.g. ymin and ymax but no y specified. I think in that situation one
+        # would expect to control the y scale with scale_numeric("y").
+        # Actually, if one calls that explicitly, it works. But if they don't,
+        # then no scale gets created for y.
 
     def _setup_mappings(self) -> None:
 
@@ -757,13 +782,13 @@ class Plot:
     ) -> None:
 
         # TODO modify out_df in place or return and handle externally?
-        for axis, values in coord_df.items():
+        for var, values in coord_df.items():
 
             # TODO Explain the logic of this method thoroughly
             # It is clever, but a bit confusing!
 
-            scale = scales[axis]
-            axis_obj = getattr(ax, f"{axis[0]}axis")
+            scale = scales[var]
+            axis_obj = getattr(ax, f"{var[0]}axis")
 
             # TODO this is no longer valid with the way the semantic order overrides
             # Perhaps better to have the scale always be the source of the order info
@@ -780,7 +805,7 @@ class Plot:
             # TODO it seems wrong that we need to cast to float here,
             # but convert_units sometimes outputs an object array (e.g. w/Int64 values)
             scaled = scale.forward(axis_obj.convert_units(values).astype(float))
-            out_df.loc[values.index, axis] = scaled
+            out_df.loc[values.index, var] = scaled
 
     def _unscale_coords(
         self,

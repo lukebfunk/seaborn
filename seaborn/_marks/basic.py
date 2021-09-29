@@ -62,15 +62,32 @@ class Point(Mark):
         # c) make color= set both face and edge color?
         # d) don't support color in those marks
         # e) not have a facecolor semantic, always use color
+        # TODO also fix this whole nasty logic
         for var in ["facecolor", "edgecolor"]:
+            getter = getattr(points, f"get_{var}")
+            setter = getattr(points, f"set_{var}")
             if var in data:
-                func = getattr(points, f"set_{var}")
-                func(mappings[var](data[var]))
+                setter(mappings[var](data[var]))
+            else:
+                val, *others = getter()
+                if not others:
+                    val = [val] * len(data["x"])
+                setter(val)  # TODO always n?
 
         if "marker" in data:
             markers = mappings["marker"](data["marker"])
             paths = [m.get_path().transformed(m.get_transform()) for m in markers]
             points.set_paths(paths)
+
+        # TODO implement fill through facecolor or by setting marker fillstyle?
+        # (Note that alpha=0 doesn't work on all backends)
+        # TODO note also we need to deal with edges being invisible by default,
+        # or alternately using the (non-colored) by default
+        if "fill" in data:
+            state = mappings["fill"](data["fill"])
+            fc = points.get_facecolors()
+            fc[~state] = (0, 0, 0, 0)
+            points.set_facecolors(fc)
 
         # TODO note that when scaling this up we'll need to catch the artist
         # and update its attributes (like in scatterplot) to allow marker variation

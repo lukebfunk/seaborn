@@ -36,13 +36,13 @@ class Semantic:
         raise NotImplementedError()
 
 
-class BinarySemantic(Semantic):
-    ...
-
-
 class DiscreteSemantic(Semantic):
 
     _provided: list | dict | None
+
+    def __init__(self, values: list | dict | None = None):
+
+        self._provided = values
 
     def _default_values(self, n: int) -> list:
         """Return n unique values."""
@@ -79,6 +79,14 @@ class DiscreteSemantic(Semantic):
             mapping = dict(zip(levels, itertools.cycle(provided)))
 
         return LookupMapping(mapping)
+
+
+class BooleanSemantic(DiscreteSemantic):
+
+    def _default_values(self, n: int) -> list:
+        return [x for x, _ in zip(itertools.cycle([True, False]), range(n))]
+
+    # TODO Should we have some generalied way of doing input checking?
 
 
 class ContinuousSemantic(Semantic):
@@ -298,10 +306,6 @@ class ColorSemantic(Semantic):
         else:
             map_type = variable_type(data, boolean_type="categorical")
         return map_type
-
-
-class FillSemantic(BinarySemantic):
-    ...
 
 
 class MarkerSemantic(DiscreteSemantic):
