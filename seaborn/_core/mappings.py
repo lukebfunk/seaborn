@@ -1,7 +1,9 @@
 from __future__ import annotations
+from copy import copy
 import itertools
 import warnings
 
+import numpy as np
 import pandas as pd
 import matplotlib as mpl
 from matplotlib.colors import to_rgb
@@ -23,6 +25,11 @@ if TYPE_CHECKING:
     DashPatternWithOffset = Tuple[float, Optional[DashPattern]]
 
 
+class IdentityTransform:
+    def __call__(self, x):
+        return x
+
+
 class Semantic:
 
     _semantic: str  # TODO or name?
@@ -34,6 +41,24 @@ class Semantic:
     ) -> SemanticMapping:
 
         raise NotImplementedError()
+
+    def _check_dict_not_missing_levels(self, levels: list, values: dict) -> None:
+
+        missing = set(levels) - set(values)
+        if missing:
+            formatted = ", ".join(map(repr, sorted(missing, key=str)))
+            err = f"Missing {self._semantic} for following value(s): {formatted}"
+            raise ValueError(err)
+
+    def _check_list_not_too_short(self, levels: list, values: list) -> None:
+
+        if len(values) > len(levels):
+            msg = " ".join([
+                f"The {self._semantic} list has fewer values ({len(values)})",
+                f"than needed ({len(levels)}) and will cycle, which may",
+                "produce an uninterpretable plot."
+            ])
+            warnings.warn(msg, UserWarning)
 
 
 class DiscreteSemantic(Semantic):
@@ -60,22 +85,11 @@ class DiscreteSemantic(Semantic):
 
         if provided is None:
             mapping = dict(zip(levels, self._default_values(len(levels))))
-        # TODO generalize these input checks in Semantic
         elif isinstance(provided, dict):
-            missing = set(data) - set(provided)
-            if missing:
-                formatted = ", ".join(map(repr, sorted(missing, key=str)))
-                err = f"Missing {self._semantic} for following value(s): {formatted}"
-                raise ValueError(err)
+            self._check_dict_not_missing_levels(levels, provided)
             mapping = provided
         elif isinstance(provided, list):
-            if len(provided) > len(levels):
-                msg = " ".join([
-                    f"The {self._semantic} list has fewer values ({len(provided)})",
-                    f"than needed ({len(levels)}) and will cycle, which may",
-                    "produce an uninterpretable plot."
-                ])
-                warnings.warn(msg, UserWarning)
+            self._check_list_not_too_short(levels, provided)
             mapping = dict(zip(levels, itertools.cycle(provided)))
 
         return LookupMapping(mapping)
@@ -92,11 +106,12 @@ class BooleanSemantic(DiscreteSemantic):
 class ContinuousSemantic(Semantic):
 
     norm: Normalize
+    transform: Callable  # TODO sort out argument typing in a way that satisfies mypy
     values: tuple[float, float]
 
     def __init__(
         self,
-        values: tuple[float, float] | list[float] | dict[Any, float] | None,
+        values: tuple[float, float] | list[float] | dict[Any, float] | None = None,
     ):
 
         self._values = values
@@ -119,24 +134,53 @@ class ContinuousSemantic(Semantic):
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
-    ):  # TODO reurn type
+    ) -> SemanticMapping:
 
         values = self._values
-        # norm = None if scale is None else scale.norm
-        # order = None if scale is None else scale.order
-        map_type = self._infer_map_type(scale, values, data)  # TODO use norm/order?
+        order = None if scale is None else scale.order
+        levels = categorical_order(data, order)
+        norm = Normalize() if scale is None or scale.norm is None else copy(scale.norm)
+        map_type = self._infer_map_type(scale, values, data)
+
+        # TODO check inputs ... what if scale.type is numeric but we got a list or dict?
+
+        # TODO how to handle values as tuple? (where they indicate output range?)
+
+        mapping: NormedMapping | LookupMapping
 
         if map_type == "numeric":
 
-            ...
+            if not norm.scaled():
+                # Initialize auto-limits
+                norm(np.asarray(data.dropna()))
+            mapping = NormedMapping(norm, self.transform)
 
         elif map_type == "categorical":
 
-            ...
+            if values is None:
+                # Go from large to small so first category seems most important
+                numbers = np.linspace(1, 0, len(levels))
+                values = self.transform(numbers)
+                mapping_dict = dict(zip(levels, values))
+            elif isinstance(values, tuple):
+                # TODO
+                raise NotImplementedError()
+            elif isinstance(values, dict):
+                self._check_dict_not_missing_levels(levels, values)
+                mapping_dict = values
+            elif isinstance(values, list):
+                self._check_list_not_too_short(levels, values)
+                # TODO check list not too long as well?
+                mapping_dict = dict(zip(levels, values))
+
+            mapping = LookupMapping(mapping_dict)
 
         elif map_type == "datetime":
 
-            ...
+            # TODO; needs implementation
+            raise NotImplementedError()
+
+        return mapping
 
     def _setup_categorical(data, values, order):
         ...
@@ -160,7 +204,6 @@ class ColorSemantic(Semantic):
         mapping: LookupMapping | NormedMapping
         palette: PaletteSpec = self._palette
 
-        # TODO allow configuration of norm in mapping methods like we do with order?
         norm = None if scale is None else scale.norm
         order = None if scale is None else scale.order
 
@@ -196,40 +239,25 @@ class ColorSemantic(Semantic):
         order: list | None,
     ) -> dict[Any, tuple[float, float, float]]:
         """Determine colors when the mapping is categorical."""
-        # -- Identify the order and name of the levels
-
         levels = categorical_order(data, order)
         n_colors = len(levels)
 
-        # -- Identify the set of colors to use
-
-        # TODO update the checks in here to use new common checks
-        # (including warning rather than raising on list palettes)
-
         if isinstance(palette, dict):
-
-            missing = set(levels) - set(palette)
-            if any(missing):
-                err = "The palette dictionary is missing keys: {}"
-                raise ValueError(err.format(missing))
-
+            self._check_dict_not_missing_levels(levels, palette)
             mapping = palette
-
         else:
-
             if palette is None:
                 if n_colors <= len(get_color_cycle()):
+                    # None uses current (global) default palette
                     colors = color_palette(None, n_colors)
                 else:
                     colors = color_palette("husl", n_colors)
             elif isinstance(palette, list):
-                if len(palette) != n_colors:
-                    err = "The palette list has the wrong number of colors."
-                    raise ValueError(err)  # TODO downgrade this to a warning?
+                self._check_list_not_too_short(levels, palette)
+                # TODO check not too long also?
                 colors = palette
             else:
                 colors = color_palette(palette, n_colors)
-
             mapping = dict(zip(levels, colors))
 
         return mapping
@@ -239,7 +267,7 @@ class ColorSemantic(Semantic):
         data: Series,
         palette: PaletteSpec,
         norm: Normalize | None,
-    ) -> tuple[dict, Normalize, Callable]:
+    ) -> tuple[dict[Any, tuple[float, float, float]], Normalize, Callable]:
         """Determine colors when the variable is quantitative."""
         cmap: Colormap
         if isinstance(palette, dict):
@@ -269,7 +297,7 @@ class ColorSemantic(Semantic):
                 cmap = color_palette(palette, as_cmap=True)
 
             # Now sort out the data normalization
-            # TODO consolidate in ScaleWrapper so we always have a norm here?
+            # TODO consolidate in ScaleWrapper so we always have a Normalize here?
             if norm is None:
                 norm = mpl.colors.Normalize()
             elif isinstance(norm, tuple):
@@ -282,6 +310,7 @@ class ColorSemantic(Semantic):
 
         def rgb_transform(x):
             rgba = cmap(x)
+            # TODO we should have general vectorized to_rgb/to_rgba
             if isinstance(rgba, tuple):
                 return to_rgb(rgba)
             else:
@@ -295,7 +324,7 @@ class ColorSemantic(Semantic):
         palette: PaletteSpec,
         data: Series,
     ) -> VarType:
-        """Determine how to implement the mapping."""
+        """Determine how to implement a color mapping."""
         map_type: VarType
         if scale is not None:
             return scale.type
@@ -327,7 +356,7 @@ class MarkerSemantic(DiscreteSemantic):
 
         self._provided = shapes
 
-    def _default_values(self, n):  # TODO or have this as an infinite generator?
+    def _default_values(self, n: int) -> list[MarkerStyle]:
         """Build an arbitrarily long list of unique marker styles for points.
 
         Parameters
@@ -370,6 +399,7 @@ class MarkerSemantic(DiscreteSemantic):
         # TODO use filled (maybe have different defaults depending on fill/nofill?)
         markers = [MarkerStyle(m) for m in markers]
 
+        # TODO or have this as an infinite generator?
         return markers[:n]
 
 
@@ -493,7 +523,7 @@ class LookupMapping(SemanticMapping):
 
         self.mapping = mapping
 
-    def __call__(self, x: Any) -> Any:  # Possibly to type output based on lookup_table?
+    def __call__(self, x: Any) -> Any:  # Possible to type output based on lookup_table?
 
         if isinstance(x, pd.Series):
             if x.dtype.name == "category":
@@ -506,7 +536,7 @@ class LookupMapping(SemanticMapping):
 
 class NormedMapping(SemanticMapping):
 
-    def __init__(self, norm: Normalize, transform: Callable):
+    def __init__(self, norm: Normalize, transform: Callable[[float], Any]):
 
         self.norm = norm
         self.transform = transform
