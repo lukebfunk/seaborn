@@ -32,8 +32,6 @@ class IdentityTransform:
 
 class Semantic:
 
-    _semantic: str  # TODO or name?
-
     def setup(
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
@@ -47,14 +45,14 @@ class Semantic:
         missing = set(levels) - set(values)
         if missing:
             formatted = ", ".join(map(repr, sorted(missing, key=str)))
-            err = f"Missing {self._semantic} for following value(s): {formatted}"
+            err = f"Missing {self.variable} for following value(s): {formatted}"
             raise ValueError(err)
 
     def _check_list_not_too_short(self, levels: list, values: list) -> None:
 
-        if len(values) > len(levels):
+        if len(levels) > len(values):
             msg = " ".join([
-                f"The {self._semantic} list has fewer values ({len(values)})",
+                f"The {self.variable} list has fewer values ({len(values)})",
                 f"than needed ({len(levels)}) and will cycle, which may",
                 "produce an uninterpretable plot."
             ])
@@ -65,9 +63,10 @@ class DiscreteSemantic(Semantic):
 
     _provided: list | dict | None
 
-    def __init__(self, values: list | dict | None = None):
+    def __init__(self, values: list | dict | None = None, variable: str = "value"):
 
         self._provided = values
+        self.variable = variable
 
     def _default_values(self, n: int) -> list:
         """Return n unique values."""
@@ -112,9 +111,11 @@ class ContinuousSemantic(Semantic):
     def __init__(
         self,
         values: tuple[float, float] | list[float] | dict[Any, float] | None = None,
+        variable: str = "",  # TODO default?
     ):
 
         self._values = values
+        self.variable = variable
 
     def _infer_map_type(
         self,
@@ -191,9 +192,10 @@ class ContinuousSemantic(Semantic):
 
 class ColorSemantic(Semantic):
 
-    def __init__(self, palette: PaletteSpec = None):
+    def __init__(self, palette: PaletteSpec = None, variable: str = "color"):
 
         self._palette = palette
+        self.variable = variable
 
     def setup(
         self,
@@ -339,11 +341,8 @@ class ColorSemantic(Semantic):
 
 class MarkerSemantic(DiscreteSemantic):
 
-    # TODO This may have to be a parameters? (e.g. for color/edgecolor)
-    _semantic = "marker"
-
     # TODO full types
-    def __init__(self, shapes: list | dict | None = None):
+    def __init__(self, shapes: list | dict | None = None, variable: str = "marker"):
 
         # TODO fill or filled parameter?
         # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
@@ -355,6 +354,7 @@ class MarkerSemantic(DiscreteSemantic):
             shapes = {k: MarkerStyle(v) for k, v in shapes.items()}
 
         self._provided = shapes
+        self.variable = variable
 
     def _default_values(self, n: int) -> list[MarkerStyle]:
         """Build an arbitrarily long list of unique marker styles for points.
@@ -405,13 +405,12 @@ class MarkerSemantic(DiscreteSemantic):
 
 class DashSemantic(DiscreteSemantic):
 
-    _semantic = "dash pattern"
-
-    def __init__(self, styles: list | dict | None = None):  # TODO full types
-
-        # TODO fill or filled parameter?
-        # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
-        # allow full matplotlib fillstyle API?
+    def __init__(
+        self,
+        styles: list | dict | None = None,
+        variable: str = "dash pattern"
+    ):
+        # TODO full types
 
         if isinstance(styles, list):
             styles = [self._get_dash_pattern(s) for s in styles]
@@ -419,6 +418,7 @@ class DashSemantic(DiscreteSemantic):
             styles = {k: self._get_dash_pattern(v) for k, v in styles.items()}
 
         self._provided = styles
+        self.variable = variable
 
     def _default_values(self, n: int) -> list[DashPatternWithOffset]:
         """Build an arbitrarily long list of unique dash styles for lines.

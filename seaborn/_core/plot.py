@@ -289,7 +289,7 @@ class Plot:
         norm: NormSpec = None,
     ) -> Plot:
 
-        self._semantics["facecolor"] = ColorSemantic(palette)
+        self._semantics["facecolor"] = ColorSemantic(palette, variable="facecolor")
         if order is not None:
             self.scale_categorical("facecolor", order=order)
         elif norm is not None:
@@ -303,7 +303,7 @@ class Plot:
         norm: NormSpec = None,
     ) -> Plot:
 
-        self._semantics["edgecolor"] = ColorSemantic(palette)
+        self._semantics["edgecolor"] = ColorSemantic(palette, variable="edgecolor")
         if order is not None:
             self.scale_categorical("edgecolor", order=order)
         elif norm is not None:
@@ -316,7 +316,7 @@ class Plot:
         order: OrderSpec = None,
     ):
 
-        self._semantics["fill"] = BooleanSemantic(values)
+        self._semantics["fill"] = BooleanSemantic(values, variable="fill")
         if order is not None:
             self.scale_categorical("fill", order=order)
         return self
@@ -327,7 +327,7 @@ class Plot:
         order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["marker"] = MarkerSemantic(shapes)
+        self._semantics["marker"] = MarkerSemantic(shapes, variable="marker")
         if order is not None:
             self.scale_categorical("marker", order=order)
         return self
@@ -338,7 +338,7 @@ class Plot:
         order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["dash"] = DashSemantic(styles)
+        self._semantics["dash"] = DashSemantic(styles, variable="dash pattern")
         if order is not None:
             self.scale_categorical("dash", order=order)
         return self

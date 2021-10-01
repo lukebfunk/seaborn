@@ -114,9 +114,12 @@ class TestColor:
 
     def test_categorical_list_with_wrong_length(self, cat_vector, cat_order):
 
-        palette = color_palette("Oranges", len(cat_order) - 1)
-        with pytest.raises(ValueError):
-            ColorSemantic(palette=palette).setup(cat_vector)
+        n = len(cat_order) - 1
+        palette = color_palette("Oranges", n)
+        msg = rf"The edgecolor list has fewer values \({n}\) than needed \({n + 1}\)"
+        m = ColorSemantic(palette=palette, variable="edgecolor")
+        with pytest.warns(UserWarning, match=msg):
+            m.setup(cat_vector)
 
     def test_categorical_with_ordered_scale(self, cat_vector):
 
