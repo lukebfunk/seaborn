@@ -32,6 +32,8 @@ class IdentityTransform:
 
 class Semantic:
 
+    variable: str
+
     def setup(
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
