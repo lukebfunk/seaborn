@@ -1,14 +1,25 @@
 from __future__ import annotations
 import numpy as np
-from .base import Mark
+from seaborn._compat import MarkerStyle
+from seaborn._marks.base import Mark
 
 
 class Point(Mark):
 
     supports = ["color"]
 
-    def __init__(self, jitter=None, **kwargs):
+    def __init__(self, marker="o", fill=True, jitter=None, **kwargs):
 
+        # TODO need general policy on mappable defaults
+        # I think a good idea would be to use some kind of singleton, so it's
+        # clear what mappable attributes can be directly set, but so that
+        # we can also read from rcParams at plot time.
+        # Will need to decide which of mapping / fixing supercedes if both set,
+        # or if that should raise an error.
+        kwargs.update(
+            marker=marker,
+            fill=fill,
+        )
         super().__init__(**kwargs)
         self.jitter = jitter  # TODO decide on form of jitter and add type hinting
 
@@ -45,52 +56,58 @@ class Point(Mark):
 
         # Then the signature could be _plot_split(ax, data, kws):  ... much simpler!
 
-        # TODO since names match, can probably be automated!
-        if "color" in data:
-            c = mappings["color"](data["color"])
-        else:
-            # TODO prevents passing in c. But do we want to permit that?
-            # I think if we implement map_color("identity"), then no
-            c = None
-
         # TODO Not backcompat with allowed (but nonfunctional) univariate plots
-        points = ax.scatter(x=data["x"], y=data["y"], c=c, **kws)
 
-        # TODO what to do about color= for marks that use facecolor and edgecolor?
-        # a) defer to matplotlib?
-        # b) implement matplotlib's (or matplotlib-like) rules in seaborn?
-        # c) make color= set both face and edge color?
-        # d) don't support color in those marks
-        # e) not have a facecolor semantic, always use color
-        # TODO also fix this whole nasty logic
-        for var in ["facecolor", "edgecolor"]:
-            getter = getattr(points, f"get_{var}")
-            setter = getattr(points, f"set_{var}")
-            if var in data:
-                setter(mappings[var](data[var]))
-            else:
-                val, *others = getter()
-                if not others:
-                    val = [val] * len(data["x"])
-                setter(val)  # TODO always n?
+        kws = kws.copy()
+
+        # TODO need better solution here
+        default_marker = kws.pop("marker")
+        default_fill = kws.pop("fill")
+
+        points = ax.scatter(x=data["x"], y=data["y"], **kws)
+
+        if "color" in data:
+            points.set_facecolors(mappings["color"](data["color"]))
+
+        if "edgecolor" in data:
+            points.set_edgecolors(mappings["edgecolor"](data["edgecolor"]))
+
+        # TODO facecolor?
+
+        n = data.shape[0]
+
+        # TODO this doesn't work. Apparently scatter is reading
+        # the marker.is_filled attribute and directing colors towards
+        # the edge/face and then setting the face to uncolored as needed.
+        # We are getting to the point where just creating the PathCollection
+        # ourselves is probably easier, but not breaking existing scatterplot
+        # calls that leverage ax.scatter features like cmap might be tricky.
+        # Another option could be to have some internal-only Marks that support
+        # the existing functional interface where doing so through the new
+        # interface would be overly cumbersome.
+        # Either way, it would be best to have a common function like
+        # apply_fill(facecolor, edgecolor, filled)
+        # We may want to think about how to work with MarkerStyle objects
+        # in the absence of a `fill` semantic so that we can relax the
+        # constraint on mixing filled and unfilled markers...
 
         if "marker" in data:
             markers = mappings["marker"](data["marker"])
-            paths = [m.get_path().transformed(m.get_transform()) for m in markers]
-            points.set_paths(paths)
+        else:
+            m = MarkerStyle(default_marker)
+            markers = (m for _ in range(n))
 
-        # TODO implement fill through facecolor or by setting marker fillstyle?
-        # (Note that alpha=0 doesn't work on all backends)
-        # TODO note also we need to deal with edges being invisible by default,
-        # or alternately using the (non-colored) by default
         if "fill" in data:
-            state = mappings["fill"](data["fill"])
-            fc = points.get_facecolors()
-            fc[~state] = (0, 0, 0, 0)
-            points.set_facecolors(fc)
+            fills = mappings["fill"](data["fill"])
+        else:
+            fills = (default_fill for _ in range(n))
 
-        # TODO note that when scaling this up we'll need to catch the artist
-        # and update its attributes (like in scatterplot) to allow marker variation
+        paths = []
+        for marker, filled in zip(markers, fills):
+            fillstyle = "full" if filled else "none"
+            m = MarkerStyle(marker, fillstyle)
+            paths.append(m.get_path().transformed(m.get_transform()))
+        points.set_paths(paths)
 
 
 class Line(Mark):

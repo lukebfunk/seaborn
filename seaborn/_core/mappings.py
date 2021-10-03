@@ -50,7 +50,7 @@ class Semantic:
             err = f"Missing {self.variable} for following value(s): {formatted}"
             raise ValueError(err)
 
-    def _check_list_not_too_short(self, levels: list, values: list) -> None:
+    def _ensure_list_not_too_short(self, levels: list, values: list) -> list:
 
         if len(levels) > len(values):
             msg = " ".join([
@@ -59,6 +59,10 @@ class Semantic:
                 "produce an uninterpretable plot."
             ])
             warnings.warn(msg, UserWarning)
+
+            values = [x for _, x in zip(levels, itertools.cycle(values))]
+
+        return values
 
 
 class DiscreteSemantic(Semantic):
@@ -80,18 +84,18 @@ class DiscreteSemantic(Semantic):
         scale: Scale | None = None,  # TODO or always have a Scale?
     ) -> LookupMapping:
 
-        provided = self._provided
+        values = self._provided
         order = None if scale is None else scale.order
         levels = categorical_order(data, order)
 
-        if provided is None:
+        if values is None:
             mapping = dict(zip(levels, self._default_values(len(levels))))
-        elif isinstance(provided, dict):
-            self._check_dict_not_missing_levels(levels, provided)
-            mapping = provided
-        elif isinstance(provided, list):
-            self._check_list_not_too_short(levels, provided)
-            mapping = dict(zip(levels, itertools.cycle(provided)))
+        elif isinstance(values, dict):
+            self._check_dict_not_missing_levels(levels, values)
+            mapping = values
+        elif isinstance(values, list):
+            values = self._ensure_list_not_too_short(levels, values)
+            mapping = dict(zip(levels, values))
 
         return LookupMapping(mapping)
 
@@ -172,7 +176,7 @@ class ContinuousSemantic(Semantic):
                 self._check_dict_not_missing_levels(levels, values)
                 mapping_dict = values
             elif isinstance(values, list):
-                self._check_list_not_too_short(levels, values)
+                values = self._ensure_list_not_too_short(levels, values)
                 # TODO check list not too long as well?
                 mapping_dict = dict(zip(levels, values))
 
@@ -257,9 +261,8 @@ class ColorSemantic(Semantic):
                 else:
                     colors = color_palette("husl", n_colors)
             elif isinstance(palette, list):
-                self._check_list_not_too_short(levels, palette)
+                colors = self._ensure_list_not_too_short(levels, palette)
                 # TODO check not too long also?
-                colors = palette
             else:
                 colors = color_palette(palette, n_colors)
             mapping = dict(zip(levels, colors))

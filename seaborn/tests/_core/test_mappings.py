@@ -112,11 +112,21 @@ class TestColor:
         with pytest.raises(ValueError):
             ColorSemantic(palette=palette).setup(cat_vector)
 
-    def test_categorical_list_with_wrong_length(self, cat_vector, cat_order):
+    def test_categorical_list_too_short(self, cat_vector, cat_order):
 
         n = len(cat_order) - 1
         palette = color_palette("Oranges", n)
         msg = rf"The edgecolor list has fewer values \({n}\) than needed \({n + 1}\)"
+        m = ColorSemantic(palette=palette, variable="edgecolor")
+        with pytest.warns(UserWarning, match=msg):
+            m.setup(cat_vector)
+
+    @pytest.mark.xfail(reason="Need decision on new behavior")
+    def test_categorical_list_too_long(self, cat_vector, cat_order):
+
+        n = len(cat_order) + 1
+        palette = color_palette("Oranges", n)
+        msg = rf"The edgecolor list has more values \({n}\) than needed \({n - 1}\)"
         m = ColorSemantic(palette=palette, variable="edgecolor")
         with pytest.warns(UserWarning, match=msg):
             m.setup(cat_vector)
