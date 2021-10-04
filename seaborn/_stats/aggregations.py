@@ -5,7 +5,8 @@ from .base import Stat
 class Mean(Stat):
 
     # TODO use some special code here to group by the orient variable?
-    grouping_vars = ["color", "edgecolor", "marker", "dash"]  # TODO get automatically
+    # TODO get automatically
+    grouping_vars = ["color", "edgecolor", "marker", "dash", "linewidth"]
 
     def __call__(self, data):
         return data.filter(regex="x|y").mean()

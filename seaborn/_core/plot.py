@@ -18,6 +18,7 @@ from seaborn._core.mappings import (
     BooleanSemantic,
     MarkerSemantic,
     DashSemantic,
+    LineWidthSemantic,
 )
 from seaborn._core.scales import (
     ScaleWrapper,
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Hashable
     from pandas import DataFrame, Series, Index
     from matplotlib.axes import Axes
+    from matplotlib.color import Normalize
     from matplotlib.figure import Figure, SubFigure
     from matplotlib.scale import ScaleBase
     from seaborn._core.mappings import Semantic, SemanticMapping
@@ -81,6 +83,7 @@ class Plot:
             "marker": MarkerSemantic(),
             "dash": DashSemantic(),
             "fill": BooleanSemantic(),
+            "linewidth": LineWidthSemantic(),
         }
 
         self._target = None
@@ -343,6 +346,21 @@ class Plot:
             self.scale_categorical("dash", order=order)
         return self
 
+    def map_linewidth(
+        self,
+        values: tuple[float, float] | list[float] | dict[Any, float] | None = None,
+        norm: Normalize | None = None,
+        # TODO clip?
+        order: OrderSpec = None,
+    ) -> Plot:
+
+        self._semantics["linewidth"] = LineWidthSemantic(values, variable="linewidth")
+        if order is not None:
+            self.scale_categorical("linewidth", order=order)
+        elif norm is not None:
+            self.scale_numeric("linewidth", norm=norm)
+        return self
+
     # TODO have map_gradient?
     # This could be used to add another color-like dimension
     # and also the basis for what mappings like stat.density -> rgba do
@@ -357,6 +375,8 @@ class Plot:
         var: str,
         scale: str | ScaleBase = "linear",
         norm: NormSpec = None,
+        # TODO add clip? Useful for e.g., making sure lines don't get too thick.
+        # (If we add clip, should we make the legend say like ``> value`)?
         **kwargs
     ) -> Plot:
 

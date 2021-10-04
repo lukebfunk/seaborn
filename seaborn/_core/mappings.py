@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
-from matplotlib.colors import to_rgb
+from matplotlib.colors import Normalize, to_rgb
 
 from seaborn._compat import MarkerStyle
 from seaborn._core.rules import VarType, variable_type, categorical_order
@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any, Callable, Optional, Tuple
     from pandas import Series
-    from matplotlib.colors import Colormap, Normalize
+    from matplotlib.colors import Colormap
     from matplotlib.scale import Scale
     from seaborn._core.typing import PaletteSpec
 
@@ -26,8 +26,19 @@ if TYPE_CHECKING:
 
 
 class IdentityTransform:
+
     def __call__(self, x):
         return x
+
+
+class RangeTransform:
+
+    def __init__(self, lo: float, hi: float):
+        self.out_range = lo, hi
+
+    def __call__(self, x: float) -> float:
+        lo, hi = self.out_range
+        return lo + x * (hi - lo)
 
 
 class Semantic:
@@ -112,7 +123,7 @@ class ContinuousSemantic(Semantic):
 
     norm: Normalize
     transform: Callable  # TODO sort out argument typing in a way that satisfies mypy
-    values: tuple[float, float]
+    default_range: tuple[float, float] = 0, 1
 
     def __init__(
         self,
@@ -126,13 +137,15 @@ class ContinuousSemantic(Semantic):
     def _infer_map_type(
         self,
         scale: Scale,
-        provided: tuple[float, float] | list[float] | dict[Any, float] | None,
+        values: tuple[float, float] | list[float] | dict[Any, float] | None,
         data: Series,
     ) -> VarType:
         """Determine how to implement the mapping."""
         map_type: VarType
         if scale is not None:
             return scale.type
+        # TODO list/dict values imply categorical
+        # TODO presence of norm implies numeric
         else:
             map_type = variable_type(data, boolean_type="categorical")
         return map_type
@@ -141,9 +154,9 @@ class ContinuousSemantic(Semantic):
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
         scale: Scale | None = None,  # TODO or always have a Scale?
-    ) -> SemanticMapping:
+    ) -> NormedMapping | LookupMapping:
 
-        values = self._values
+        values = self.default_range if self._values is None else self._values
         order = None if scale is None else scale.order
         levels = categorical_order(data, order)
         norm = Normalize() if scale is None or scale.norm is None else copy(scale.norm)
@@ -155,22 +168,28 @@ class ContinuousSemantic(Semantic):
 
         mapping: NormedMapping | LookupMapping
 
+        transform = RangeTransform(*values)
+
         if map_type == "numeric":
+
+            if isinstance(norm, tuple):
+                norm = Normalize(*norm)
 
             if not norm.scaled():
                 # Initialize auto-limits
                 norm(np.asarray(data.dropna()))
-            mapping = NormedMapping(norm, self.transform)
+
+            mapping = NormedMapping(norm, transform)
 
         elif map_type == "categorical":
 
             if values is None:
-                # Go from large to small so first category seems most important
+                # Go from large to small so first category appears most important
                 numbers = np.linspace(1, 0, len(levels))
-                values = self.transform(numbers)
+                values = transform(numbers)
                 mapping_dict = dict(zip(levels, values))
             elif isinstance(values, tuple):
-                # TODO
+                # TODO even spacing between these values, large to small?
                 raise NotImplementedError()
             elif isinstance(values, dict):
                 self._check_dict_not_missing_levels(levels, values)
@@ -188,9 +207,6 @@ class ContinuousSemantic(Semantic):
             raise NotImplementedError()
 
         return mapping
-
-    def _setup_categorical(data, values, order):
-        ...
 
 
 # ==================================================================================== #
@@ -408,6 +424,7 @@ class MarkerSemantic(DiscreteSemantic):
         return markers[:n]
 
 
+# TODO or linestyle?
 class DashSemantic(DiscreteSemantic):
 
     def __init__(
@@ -512,7 +529,34 @@ class DashSemantic(DiscreteSemantic):
         return offset, dashes
 
 
+# TODO or pattern?
+class HatchSemantic(DiscreteSemantic):
+    ...
+
+
+# TODO allow subclass to define validation function for values?
+
+
 class AreaSemantic(ContinuousSemantic):
+    ...
+
+
+class WidthSemantic(ContinuousSemantic):
+    default_range: tuple[float, float] = .2, .8
+
+
+class LineWidthSemantic(ContinuousSemantic):
+    # TODO scale rcParam by default (.5, 2), use property to do it
+    # TODO Plot should probably cache the rcParams at the time it's set up...
+    default_range: tuple[float, float] = .5, 2
+
+
+class EdgeWidthSemantic(ContinuousSemantic):
+    ...
+
+
+# TODO or opacity?
+class AlphaSemantic(ContinuousSemantic):
     ...
 
 
