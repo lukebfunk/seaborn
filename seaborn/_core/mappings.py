@@ -123,7 +123,7 @@ class ContinuousSemantic(Semantic):
 
     norm: Normalize
     transform: Callable  # TODO sort out argument typing in a way that satisfies mypy
-    default_range: tuple[float, float] = 0, 1
+    _default_range: tuple[float, float] = 0, 1
 
     def __init__(
         self,
@@ -133,6 +133,10 @@ class ContinuousSemantic(Semantic):
 
         self._values = values
         self.variable = variable
+
+    @property
+    def default_range(self) -> tuple[float, float]:
+        return self._default_range
 
     def _infer_map_type(
         self,
@@ -542,13 +546,16 @@ class AreaSemantic(ContinuousSemantic):
 
 
 class WidthSemantic(ContinuousSemantic):
-    default_range: tuple[float, float] = .2, .8
+
+    _default_range = .2, .8
 
 
 class LineWidthSemantic(ContinuousSemantic):
-    # TODO scale rcParam by default (.5, 2), use property to do it
-    # TODO Plot should probably cache the rcParams at the time it's set up...
-    default_range: tuple[float, float] = .5, 2
+
+    @property
+    def default_range(self) -> tuple[float, float]:
+        base = mpl.rcParams["lines.linewidth"]
+        return base * .5, base * 2
 
 
 class EdgeWidthSemantic(ContinuousSemantic):

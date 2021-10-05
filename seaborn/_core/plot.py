@@ -48,11 +48,21 @@ if TYPE_CHECKING:
     )
 
 
+SEMANTICS = {  # TODO should this be pluggable?
+    "color": ColorSemantic(),
+    "facecolor": ColorSemantic(),
+    "edgecolor": ColorSemantic(),
+    "marker": MarkerSemantic(),
+    "dash": DashSemantic(),
+    "fill": BooleanSemantic(),
+    "linewidth": LineWidthSemantic(),
+}
+
+
 class Plot:
 
     _data: PlotData
     _layers: list[Layer]
-    # TODO -> _semantics, have _mappings hold the objects returned from Semantic.setup?
     _semantics: dict[str, Semantic]
     _mappings: dict[str, SemanticMapping]  # TODO keys as Literal, or use TypedDict?
     _scales: dict[str, ScaleWrapper]
@@ -73,25 +83,14 @@ class Plot:
         self._data = PlotData(data, variables)
         self._layers = []
 
-        # TODO see notes in _setup_mappings I think we're going to start with this
-        # empty and define the defaults elsewhere
-        # TODO related to automatic definition of mapping methods FIXME:mapping
-        self._semantics = {
-            "color": ColorSemantic(),
-            "facecolor": ColorSemantic(),
-            "edgecolor": ColorSemantic(),
-            "marker": MarkerSemantic(),
-            "dash": DashSemantic(),
-            "fill": BooleanSemantic(),
-            "linewidth": LineWidthSemantic(),
-        }
-
-        self._target = None
-
         self._scales = {}
+        self._semantics = {}
+
         self._subplotspec = {}
         self._facetspec = {}
         self._pairspec = {}
+
+        self._target = None
 
     def on(self, target: Axes | SubFigure | Figure) -> Plot:
 
@@ -317,7 +316,7 @@ class Plot:
         self,
         values: list | dict | None = None,
         order: OrderSpec = None,
-    ):
+    ) -> Plot:
 
         self._semantics["fill"] = BooleanSemantic(values, variable="fill")
         if order is not None:
@@ -367,8 +366,6 @@ class Plot:
 
     # TODO originally we had planned to have a scale_native option that would default
     # to matplotlib. I don't fully remember why. Is this still something we need?
-
-    # TODO related, scale_identity which uses the data as literal attribute values
 
     def scale_numeric(
         self,
@@ -471,6 +468,8 @@ class Plot:
         # figsize (so that works), but expands to prevent subplots from being squished
         # Also should we have height=, aspect=, exclusive with figsize? Or working
         # with figsize when only one is defined?
+
+        # TODO figsize has no actual effect here
 
         subplot_keys = ["sharex", "sharey"]
         for key in subplot_keys:
@@ -586,19 +585,22 @@ class Plot:
         # TODO we should setup default mappings here based on whether a mapping
         # variable appears in at least one of the layer data but isn't in self._mappings
         # Source of what mappings to check can be some dictionary of default mappings?
+        defined = [v for v in SEMANTICS if any(v in y for y in self._layers)]
 
         self._mappings = {}
-        for var, semantic in self._semantics.items():
-            if any(var in layer for layer in self._layers):
-                all_values = pd.concat([
-                    self._data.frame.get(var),
-                    # TODO important to check for var in x.variables, not just in x
-                    # Because we only want to concat if a variable was *added* here
-                    # TODO note copy=pasted from setup_scales code!
-                    *(x.data.frame.get(var) for x in self._layers if var in x.variables)
-                ], ignore_index=True)
-                scale = self._scales.get(var)
-                self._mappings[var] = semantic.setup(all_values, scale)
+        for var in defined:
+
+            semantic = self._semantics.get(var) or SEMANTICS[var]
+
+            all_values = pd.concat([
+                self._data.frame.get(var),
+                # TODO important to check for var in x.variables, not just in x
+                # Because we only want to concat if a variable was *added* here
+                # TODO note copy=pasted from setup_scales code!
+                *(x.data.frame.get(var) for x in self._layers if var in x.variables)
+            ], ignore_index=True)
+            scale = self._scales.get(var)
+            self._mappings[var] = semantic.setup(all_values, scale)
 
     def _setup_figure(self, pyplot: bool = False) -> None:
 
@@ -893,7 +895,7 @@ class Plot:
 
             yield subplots, scales, df.assign(**reassignments)
 
-    def _filter_subplot_data(  # TODO FIXME:names maybe _filter_subplot_data?
+    def _filter_subplot_data(
         self,
         df: DataFrame,
         subplot: dict,
