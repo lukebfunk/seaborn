@@ -310,9 +310,56 @@ class TestColor:
             ColorSemantic().setup(num_vector, scale)
 
 
-class TestDash:
+class DiscreteBase:
 
-    def assert_dashes_equal(self, a, b):
+    def test_none_provided(self):
+
+        keys = pd.Series(["a", "b", "c"])
+        m = self.semantic().setup(keys)
+
+        defaults = self.semantic()._default_values(len(keys))
+
+        for key, want in zip(keys, defaults):
+            self.assert_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(defaults)
+        for have, want in zip(mapped, defaults):
+            self.assert_equal(have, want)
+
+    def _test_provided_list(self, values):
+
+        keys = pd.Series(["a", "b", "c", "d"])
+        m = self.semantic(values).setup(keys)
+
+        for key, want in zip(keys, values):
+            self.assert_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(values)
+        for have, want in zip(mapped, values):
+            self.assert_equal(have, want)
+
+    def _test_provided_dict(self, values):
+
+        keys = pd.Series(["a", "b", "c", "d"])
+        mapping = dict(zip(keys, values))
+        m = self.semantic(mapping).setup(keys)
+
+        for key, want in mapping.items():
+            self.assert_equal(m(key), want)
+
+        mapped = m(keys)
+        assert len(mapped) == len(values)
+        for have, want in zip(mapped, values):
+            self.assert_equal(have, want)
+
+
+class TestDashes(DiscreteBase):
+
+    semantic = DashSemantic
+
+    def assert_equal(self, a, b):
 
         a = DashSemantic._get_dash_pattern(a)
         b = DashSemantic._get_dash_pattern(b)
@@ -332,49 +379,15 @@ class TestDash:
             assert spec[0] == 0
             assert not len(spec[1]) % 2
 
-    def test_none_provided(self):
-
-        keys = pd.Series(["a", "b", "c"])
-        m = DashSemantic().setup(keys)
-
-        defaults = DashSemantic()._default_values(len(keys))
-
-        for key, want in zip(keys, defaults):
-            self.assert_dashes_equal(m(key), want)
-
-        mapped = m(keys)
-        assert len(mapped) == len(defaults)
-        for have, want in zip(mapped, defaults):
-            self.assert_dashes_equal(have, want)
-
     def test_provided_list(self):
 
-        keys = pd.Series(["a", "b", "c", "d"])
-        dashes = ["-", (1, 4), "dashed", (.5, (5, 2))]
-        m = DashSemantic(dashes).setup(keys)
-
-        for key, want in zip(keys, dashes):
-            self.assert_dashes_equal(m(key), want)
-
-        mapped = m(keys)
-        assert len(mapped) == len(dashes)
-        for have, want in zip(mapped, dashes):
-            self.assert_dashes_equal(have, want)
+        values = ["-", (1, 4), "dashed", (.5, (5, 2))]
+        self._test_provided_list(values)
 
     def test_provided_dict(self):
 
-        keys = pd.Series(["a", "b", "c", "d"])
         values = ["-", (1, 4), "dashed", (.5, (5, 2))]
-        dashes = dict(zip(keys, values))
-        m = DashSemantic(dashes).setup(keys)
-
-        for key, want in dashes.items():
-            self.assert_dashes_equal(m(key), want)
-
-        mapped = m(keys)
-        assert len(mapped) == len(values)
-        for have, want in zip(mapped, values):
-            self.assert_dashes_equal(have, want)
+        self._test_provided_dict(values)
 
     def test_provided_dict_with_missing(self):
 
@@ -385,9 +398,12 @@ class TestDash:
             m.setup(keys)
 
 
-class TestMarker:
+class TestMarker(DiscreteBase):
 
-    def assert_markers_equal(self, a, b):
+    variable = "marker"
+    semantic = MarkerSemantic
+
+    def assert_equal(self, a, b):
 
         a = MarkerStyle(a)
         b = MarkerStyle(b)
@@ -410,49 +426,15 @@ class TestMarker:
         for m in markers:
             assert MarkerStyle(m).is_filled()
 
-    def test_none_provided(self):
-
-        keys = pd.Series(["a", "b", "c"])
-        m = MarkerSemantic().setup(keys)
-
-        defaults = MarkerSemantic()._default_values(len(keys))
-
-        for key, want in zip(keys, defaults):
-            self.assert_markers_equal(m(key), want)
-
-        mapped = m(keys)
-        assert len(mapped) == len(defaults)
-        for have, want in zip(mapped, defaults):
-            self.assert_markers_equal(have, want)
-
     def test_provided_list(self):
 
-        keys = pd.Series(["a", "b", "c"])
-        markers = ["o", (5, 2, 0), MarkerStyle("o", fillstyle="none")]
-        m = MarkerSemantic(markers).setup(keys)
-
-        for key, want in zip(keys, markers):
-            self.assert_markers_equal(m(key), want)
-
-        mapped = m(keys)
-        assert len(mapped) == len(markers)
-        for have, want in zip(mapped, markers):
-            self.assert_markers_equal(have, want)
+        markers = ["o", (5, 2, 0), MarkerStyle("o", fillstyle="none"), "x"]
+        self._test_provided_list(markers)
 
     def test_provided_dict(self):
 
-        keys = pd.Series(["a", "b", "c"])
-        values = ["o", (5, 2, 0), MarkerStyle("o", fillstyle="none")]
-        markers = dict(zip(keys, values))
-        m = MarkerSemantic(markers).setup(keys)
-
-        for key, want in markers.items():
-            self.assert_markers_equal(m(key), want)
-
-        mapped = m(keys)
-        assert len(mapped) == len(values)
-        for have, want in zip(mapped, values):
-            self.assert_markers_equal(have, want)
+        values = ["o", (5, 2, 0), MarkerStyle("o", fillstyle="none"), "x"]
+        self._test_provided_dict(values)
 
     def test_provided_dict_with_missing(self):
 
