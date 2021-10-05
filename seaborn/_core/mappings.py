@@ -78,11 +78,11 @@ class Semantic:
 
 class DiscreteSemantic(Semantic):
 
-    _provided: list | dict | None
+    _values: list | dict | None
 
     def __init__(self, values: list | dict | None = None, variable: str = "value"):
 
-        self._provided = values
+        self._values = values
         self.variable = variable
 
     def _default_values(self, n: int) -> list:
@@ -95,7 +95,7 @@ class DiscreteSemantic(Semantic):
         scale: Scale | None = None,  # TODO or always have a Scale?
     ) -> LookupMapping:
 
-        values = self._provided
+        values = self._values
         order = None if scale is None else scale.order
         levels = categorical_order(data, order)
 
@@ -378,7 +378,7 @@ class MarkerSemantic(DiscreteSemantic):
         elif isinstance(shapes, dict):
             shapes = {k: MarkerStyle(v) for k, v in shapes.items()}
 
-        self._provided = shapes
+        self._values = shapes
         self.variable = variable
 
     def _default_values(self, n: int) -> list[MarkerStyle]:
@@ -443,7 +443,7 @@ class DashSemantic(DiscreteSemantic):
         elif isinstance(styles, dict):
             styles = {k: self._get_dash_pattern(v) for k, v in styles.items()}
 
-        self._provided = styles
+        self._values = styles
         self.variable = variable
 
     def _default_values(self, n: int) -> list[DashPatternWithOffset]:
