@@ -1,4 +1,5 @@
 import pandas as pd
+import matplotlib as mpl
 from matplotlib.scale import LinearScale
 from matplotlib.colors import Normalize, to_rgb
 
@@ -11,9 +12,12 @@ from seaborn._compat import MarkerStyle
 from seaborn._core.rules import categorical_order
 from seaborn._core.scales import ScaleWrapper, CategoricalScale
 from seaborn._core.mappings import (
+    BooleanSemantic,
     ColorSemantic,
     DashSemantic,
     MarkerSemantic,
+    LineWidthSemantic,
+    WidthSemantic,
 )
 from seaborn.palettes import color_palette
 
@@ -400,7 +404,6 @@ class TestDashes(DiscreteBase):
 
 class TestMarker(DiscreteBase):
 
-    variable = "marker"
     semantic = MarkerSemantic
 
     def assert_equal(self, a, b):
@@ -443,3 +446,94 @@ class TestMarker(DiscreteBase):
         err = r"Missing marker for following value\(s\): 1, 'a'"
         with pytest.raises(ValueError, match=err):
             m.setup(keys)
+
+
+class TestBoolean:
+
+    def test_default(self):
+
+        x = pd.Series(["a", "b"])
+        m = BooleanSemantic().setup(x)
+        assert m("a") is True
+        assert m("b") is False
+
+    def test_default_warns(self):
+
+        x = pd.Series(["a", "b", "c"])
+        s = BooleanSemantic(variable="fill")
+        msg = "There are only two possible fill values, so they will cycle"
+        with pytest.warns(UserWarning, match=msg):
+            m = s.setup(x)
+        assert m("a") is True
+        assert m("b") is False
+        assert m("c") is True
+
+    def test_provided_list(self):
+
+        x = pd.Series(["a", "b", "c"])
+        values = [True, True, False]
+        m = BooleanSemantic(values).setup(x)
+        for k, v in zip(x, values):
+            assert m(k) is v
+
+
+class ContinuousBase:
+
+    @staticmethod
+    def norm(x, vmin, vmax):
+        normed = x - vmin
+        normed /= vmax - vmin
+        return normed
+
+    @staticmethod
+    def transform(x, lo, hi):
+        return lo + x * (hi - lo)
+
+    def test_default(self):
+
+        x = pd.Series([-1, .4, 2, 1.2])
+        m = self.semantic().setup(x)
+        y = m(x)
+
+        lo, hi = self.semantic().default_range
+        normed = self.norm(x, x.min(), x.max())
+        expected = self.transform(normed, lo, hi)
+
+        assert_array_equal(y, expected)
+
+    def test_provided_range(self):
+
+        values = (1, 5)
+        x = pd.Series([-1, .4, 2, 1.2])
+        m = self.semantic(values).setup(x)
+        y = m(x)
+
+        lo, hi = values
+        normed = self.norm(x, x.min(), x.max())
+        expected = self.transform(normed, lo, hi)
+
+        assert_array_equal(y, expected)
+
+    def test_provided_norm(self):
+
+        x = pd.Series([2, 500, 10])
+        norm = mpl.colors.LogNorm(1, 100)
+        scale = ScaleWrapper(mpl.scale.LinearScale("x"), "numeric", norm=norm)
+        m = self.semantic().setup(x, scale)
+        y = m(x)
+
+        lo, hi = self.semantic().default_range
+        normed = norm(x)
+        expected = self.transform(normed, lo, hi)
+
+        assert_array_equal(y, expected)
+
+
+class TestWidth(ContinuousBase):
+
+    semantic = WidthSemantic
+
+
+class TestLineWidth(ContinuousBase):
+
+    semantic = LineWidthSemantic

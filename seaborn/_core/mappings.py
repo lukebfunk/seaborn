@@ -40,6 +40,11 @@ class RangeTransform:
         lo, hi = self.out_range
         return lo + x * (hi - lo)
 
+# TODO RGBTransform?
+
+
+# ==================================================================================== #
+
 
 class Semantic:
 
@@ -114,6 +119,12 @@ class DiscreteSemantic(Semantic):
 class BooleanSemantic(DiscreteSemantic):
 
     def _default_values(self, n: int) -> list:
+        if n > 2:
+            msg = " ".join([
+                f"There are only two possible {self.variable} values,",
+                "so they will cycle and may produce an uninterpretable plot",
+            ])
+            warnings.warn(msg, UserWarning)
         return [x for x, _ in zip(itertools.cycle([True, False]), range(n))]
 
     # TODO Should we have some generalied way of doing input checking?
