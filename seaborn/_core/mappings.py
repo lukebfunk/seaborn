@@ -50,6 +50,13 @@ class Semantic:
 
     variable: str
 
+    # TODO semantics should pass values through a validation/standardization function
+    # (e.g., convert marker values into MarkerStyle object, or raise nicely)
+    # (e.g., raise if requested alpha values are outside of [0, 1])
+    # (what's the right name for this function?)
+    def _homogenize_values(self, values):
+        return values
+
     def setup(
         self,
         data: Series,  # TODO generally rename Series arguments to distinguish from DF?
@@ -159,8 +166,8 @@ class ContinuousSemantic(Semantic):
         map_type: VarType
         if scale is not None:
             return scale.type
-        # TODO list/dict values imply categorical
-        # TODO presence of norm implies numeric
+        elif isinstance(values, (list, dict)):
+            return "categorical"
         else:
             map_type = variable_type(data, boolean_type="categorical")
         return map_type
@@ -178,17 +185,14 @@ class ContinuousSemantic(Semantic):
         map_type = self._infer_map_type(scale, values, data)
 
         # TODO check inputs ... what if scale.type is numeric but we got a list or dict?
-
-        # TODO how to handle values as tuple? (where they indicate output range?)
+        # (This can happen given the way that _infer_map_type works)
+        # And what happens if we have a norm but var type is categorical?
 
         mapping: NormedMapping | LookupMapping
 
-        transform = RangeTransform(*values)
-
         if map_type == "numeric":
 
-            if isinstance(norm, tuple):
-                norm = Normalize(*norm)
+            transform = RangeTransform(*values)
 
             if not norm.scaled():
                 # Initialize auto-limits
@@ -198,14 +202,12 @@ class ContinuousSemantic(Semantic):
 
         elif map_type == "categorical":
 
-            if values is None:
-                # Go from large to small so first category appears most important
+            if isinstance(values, tuple):
+                # TODO even spacing between these values, large to small?
                 numbers = np.linspace(1, 0, len(levels))
+                transform = RangeTransform(*values)
                 values = transform(numbers)
                 mapping_dict = dict(zip(levels, values))
-            elif isinstance(values, tuple):
-                # TODO even spacing between these values, large to small?
-                raise NotImplementedError()
             elif isinstance(values, dict):
                 self._check_dict_not_missing_levels(levels, values)
                 mapping_dict = values
@@ -570,7 +572,12 @@ class LineWidthSemantic(ContinuousSemantic):
 
 
 class EdgeWidthSemantic(ContinuousSemantic):
-    ...
+
+    @property
+    def default_range(self) -> tuple[float, float]:
+        # TODO use patch.linewidth or lines.markeredgewidth here?
+        base = mpl.rcParams["patch.linewidth"]
+        return base * .5, base * 2
 
 
 # TODO or opacity?

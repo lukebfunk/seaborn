@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import matplotlib as mpl
 from matplotlib.scale import LinearScale
@@ -16,8 +17,9 @@ from seaborn._core.mappings import (
     ColorSemantic,
     DashSemantic,
     MarkerSemantic,
-    LineWidthSemantic,
     WidthSemantic,
+    EdgeWidthSemantic,
+    LineWidthSemantic,
 )
 from seaborn.palettes import color_palette
 
@@ -489,44 +491,97 @@ class ContinuousBase:
     def transform(x, lo, hi):
         return lo + x * (hi - lo)
 
-    def test_default(self):
+    def test_default_numeric(self):
 
         x = pd.Series([-1, .4, 2, 1.2])
-        m = self.semantic().setup(x)
-        y = m(x)
-
-        lo, hi = self.semantic().default_range
+        y = self.semantic().setup(x)(x)
         normed = self.norm(x, x.min(), x.max())
-        expected = self.transform(normed, lo, hi)
-
+        expected = self.transform(normed, *self.semantic().default_range)
         assert_array_equal(y, expected)
 
-    def test_provided_range(self):
+    def test_default_categorical(self):
+
+        x = pd.Series(["a", "c", "b", "c"])
+        y = self.semantic().setup(x)(x)
+        normed = np.array([1, .5, 0, .5])
+        expected = self.transform(normed, *self.semantic().default_range)
+        assert_array_equal(y, expected)
+
+    def test_range_numeric(self):
 
         values = (1, 5)
         x = pd.Series([-1, .4, 2, 1.2])
-        m = self.semantic(values).setup(x)
-        y = m(x)
-
-        lo, hi = values
+        y = self.semantic(values).setup(x)(x)
         normed = self.norm(x, x.min(), x.max())
-        expected = self.transform(normed, lo, hi)
-
+        expected = self.transform(normed, *values)
         assert_array_equal(y, expected)
 
-    def test_provided_norm(self):
+    def test_range_categorical(self):
+
+        x = pd.Series(["a", "c", "b", "c"])
+        values = (1, 5)
+        y = self.semantic(values).setup(x)(x)
+        normed = np.array([1, .5, 0, .5])
+        expected = self.transform(normed, *values)
+        assert_array_equal(y, expected)
+
+    def test_list_numeric(self):
+
+        x = pd.Series([2, 500, 10, 500])
+        values = [.3, .8, .5]
+        expected = [.3, .5, .8, .5]
+        y = self.semantic(values).setup(x)(x)
+        assert_array_equal(y, expected)
+
+    def test_list_categorical(self):
+
+        x = pd.Series(["a", "c", "b", "c"])
+        values = [.2, .6, .4]
+        expected = [.2, .6, .4, .6]
+        y = self.semantic(values).setup(x)(x)
+        assert_array_equal(y, expected)
+
+    def test_list_implies_categorical(self):
+
+        x = pd.Series([2, 500, 10, 500])
+        values = [.2, .6, .4]
+        expected = [.2, .4, .6, .4]
+        y = self.semantic(values).setup(x)(x)
+        assert_array_equal(y, expected)
+
+    def test_dict_numeric(self):
+
+        x = pd.Series([2, 500, 10, 500])
+        values = {2: .3, 500: .5, 10: .8}
+        y = self.semantic(values).setup(x)(x)
+        assert_array_equal(y, x.map(values))
+
+    def test_dict_categorical(self):
+
+        x = pd.Series(["a", "c", "b", "c"])
+        values = {"a": .3, "b": .5, "c": .8}
+        y = self.semantic(values).setup(x)(x)
+        assert_array_equal(y, x.map(values))
+
+    def test_norm_numeric(self):
 
         x = pd.Series([2, 500, 10])
         norm = mpl.colors.LogNorm(1, 100)
         scale = ScaleWrapper(mpl.scale.LinearScale("x"), "numeric", norm=norm)
-        m = self.semantic().setup(x, scale)
-        y = m(x)
-
-        lo, hi = self.semantic().default_range
-        normed = norm(x)
-        expected = self.transform(normed, lo, hi)
-
+        y = self.semantic().setup(x, scale)(x)
+        expected = self.transform(norm(x), *self.semantic().default_range)
         assert_array_equal(y, expected)
+
+    @pytest.mark.xfail(reason="Needs decision about behavior")
+    def test_norm_categorical(self):
+
+        # TODO is it right to raise here or should that happen upstream?
+        # Or is there some reasonable way to actually use the norm?
+        x = pd.Series(["a", "c", "b", "c"])
+        norm = mpl.colors.LogNorm(1, 100)
+        scale = ScaleWrapper(mpl.scale.LinearScale("x"), "numeric", norm=norm)
+        with pytest.raises(ValueError):
+            self.semantic().setup(x, scale)
 
 
 class TestWidth(ContinuousBase):
@@ -537,3 +592,8 @@ class TestWidth(ContinuousBase):
 class TestLineWidth(ContinuousBase):
 
     semantic = LineWidthSemantic
+
+
+class TestEdgeWidth(ContinuousBase):
+
+    semantic = EdgeWidthSemantic
