@@ -201,20 +201,7 @@ class ContinuousSemantic(Semantic):
 
         mapping: NormedMapping | LookupMapping
 
-        if map_type == "numeric":
-
-            if not isinstance(values, tuple):
-                raise TypeError()  # TODO
-
-            transform = RangeTransform(values)
-
-            if not norm.scaled():
-                # Initialize auto-limits
-                norm(np.asarray(data.dropna()))
-
-            mapping = NormedMapping(norm, transform)
-
-        elif map_type == "categorical":
+        if map_type == "categorical":
 
             if isinstance(values, tuple):
                 numbers = np.linspace(1, 0, len(levels))
@@ -228,12 +215,31 @@ class ContinuousSemantic(Semantic):
                 # TODO check list not too long as well?
                 mapping_dict = dict(zip(levels, values))
 
-            mapping = LookupMapping(mapping_dict)
+            return LookupMapping(mapping_dict)
+
+        if not isinstance(values, tuple):
+            raise TypeError()  # TODO
+
+        if map_type == "numeric":
+
+            data = pd.to_numeric(data.dropna())
+            prepare = None
 
         elif map_type == "datetime":
 
-            # TODO; needs implementation
-            raise NotImplementedError()
+            if scale is not None:
+                data = scale.cast(data)
+            data = mpl.dates.date2num(data.dropna())
+            prepare = lambda x: mpl.dates.date2num(pd.to_datetime(x))
+
+            # TODO if norm is tuple, convert to datetime and then to numbers?
+
+        transform = RangeTransform(values)
+
+        if not norm.scaled():
+            norm(np.asarray(data))
+
+        mapping = NormedMapping(norm, transform, prepare)
 
         return mapping
 
@@ -266,22 +272,31 @@ class ColorSemantic(Semantic):
         map_type = self._infer_map_type(scale, palette, data)
 
         if map_type == "categorical":
+            return LookupMapping(self._setup_categorical(data, palette, order))
 
-            mapping = LookupMapping(self._setup_categorical(data, palette, order))
-
-        elif map_type == "numeric":
+        if map_type == "numeric":
 
             data = pd.to_numeric(data)
-            lookup, norm, transform = self._setup_numeric(data, palette, norm)
-            if lookup:
-                # TODO See comments in _setup_numeric about deprecation of this
-                mapping = LookupMapping(lookup)
-            else:
-                mapping = NormedMapping(norm, transform)
+            prepare = None
 
         elif map_type == "datetime":
-            # TODO this needs actual implementation
-            mapping = LookupMapping(self._setup_categorical(data, palette, order))
+
+            if scale is not None:
+                data = scale.cast(data)
+            # TODO we need this to be a series because we'll do norm(data.dropna())
+            # we could avoid this by defining a little scale_norm() wrapper that
+            # removes nas more type-agnostically
+            data = pd.Series(mpl.dates.date2num(data), index=data.index)
+            prepare = lambda x: mpl.dates.date2num(pd.to_datetime(x))
+
+            # TODO if norm is tuple, convert to datetime and then to numbers?
+
+        lookup, norm, transform = self._setup_numeric(data, palette, norm)
+        if lookup:
+            # TODO See comments in _setup_numeric about deprecation of this
+            mapping = LookupMapping(lookup)
+        else:
+            mapping = NormedMapping(norm, transform, prepare)
 
         return mapping
 
@@ -604,10 +619,16 @@ class LookupMapping(SemanticMapping):
 
 class NormedMapping(SemanticMapping):
 
-    def __init__(self, norm: Normalize, transform: Callable[[ArrayLike], Any]):
+    def __init__(
+        self,
+        norm: Normalize,
+        transform: Callable[[ArrayLike], Any],
+        prepare: Callable[[ArrayLike], ArrayLike] | None = None,
+    ):
 
         self.norm = norm
         self.transform = transform
+        self.prepare = prepare
 
     def __call__(self, x: Any) -> Any:
 
@@ -615,4 +636,6 @@ class NormedMapping(SemanticMapping):
             # Compatability for matplotlib<3.4.3
             # https://github.com/matplotlib/matplotlib/pull/20511
             x = np.asarray(x)
+        if self.prepare is not None:
+            x = self.prepare(x)
         return self.transform(self.norm(x))

@@ -121,6 +121,7 @@ class DatetimeScale(LinearScale):
             # Note that pandas ends up converting everything to ns internally afterwards
             return pd.to_datetime(data, unit="D")
         else:
+            # TODO should we accept a format string for handling ambiguous strings?
             return pd.to_datetime(data)
 
 

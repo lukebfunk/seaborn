@@ -438,8 +438,11 @@ class Plot:
 
         # TODO what else should this do?
         # We should pass kwargs to the DateTime cast probably.
+        # Should we also explicitly expose more of the pd.to_datetime interface?
+
         # It will be nice to have more control over the formatting of the ticks
         # which is pretty annoying in standard matplotlib.
+
         # Should datetime data ever have anything other than a linear scale?
         # The only thing I can really think of are geologic/astro plots that
         # use a reverse log scale, (but those are usually in units of years).
