@@ -8,7 +8,6 @@ import pytest
 from numpy.testing import assert_array_equal
 from pandas.testing import assert_series_equal
 
-# TODO from seaborn._compat import MarkerStyle
 from seaborn._compat import MarkerStyle
 from seaborn._core.rules import categorical_order
 from seaborn._core.scales import ScaleWrapper, CategoricalScale

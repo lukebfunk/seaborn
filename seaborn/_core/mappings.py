@@ -72,8 +72,8 @@ class Semantic:
 
     def setup(
         self,
-        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
-        scale: Scale | None = None,  # TODO or always have a Scale?
+        data: Series,
+        scale: Scale | None = None,
     ) -> SemanticMapping:
 
         raise NotImplementedError()
@@ -116,8 +116,8 @@ class DiscreteSemantic(Semantic):
 
     def setup(
         self,
-        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
-        scale: Scale | None = None,  # TODO or always have a Scale?
+        data: Series,
+        scale: Scale | None = None,
     ) -> LookupMapping:
 
         values = self._values
@@ -147,13 +147,11 @@ class BooleanSemantic(DiscreteSemantic):
             warnings.warn(msg, UserWarning)
         return [x for x, _ in zip(itertools.cycle([True, False]), range(n))]
 
-    # TODO Should we have some generalied way of doing input checking?
-
 
 class ContinuousSemantic(Semantic):
 
     norm: Normalize
-    transform: Callable  # TODO sort out argument typing in a way that satisfies mypy
+    transform: RangeTransform
     _default_range: tuple[float, float] = (0, 1)
 
     def __init__(
@@ -187,8 +185,8 @@ class ContinuousSemantic(Semantic):
 
     def setup(
         self,
-        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
-        scale: Scale | None = None,  # TODO or always have a Scale?
+        data: Series,
+        scale: Scale | None = None,
     ) -> NormedMapping | LookupMapping:
 
         values = self.default_range if self._values is None else self._values
@@ -219,7 +217,6 @@ class ContinuousSemantic(Semantic):
         elif map_type == "categorical":
 
             if isinstance(values, tuple):
-                # TODO even spacing between these values, large to small?
                 numbers = np.linspace(1, 0, len(levels))
                 transform = RangeTransform(values)
                 mapping_dict = dict(zip(levels, transform(numbers)))
@@ -253,8 +250,8 @@ class ColorSemantic(Semantic):
 
     def setup(
         self,
-        data: Series,  # TODO generally rename Series arguments to distinguish from DF?
-        scale: Scale | None = None,  # TODO or always have a Scale?
+        data: Series,
+        scale: Scale | None = None,
     ) -> LookupMapping | NormedMapping:
         """Infer the type of mapping to use and define it using this vector of data."""
         mapping: LookupMapping | NormedMapping
@@ -352,7 +349,6 @@ class ColorSemantic(Semantic):
                 cmap = color_palette(palette, as_cmap=True)
 
             # Now sort out the data normalization
-            # TODO consolidate in ScaleWrapper so we always have a Normalize here?
             if norm is None:
                 norm = mpl.colors.Normalize()
             elif isinstance(norm, tuple):
@@ -390,10 +386,6 @@ class MarkerSemantic(DiscreteSemantic):
 
     # TODO full types
     def __init__(self, shapes: list | dict | None = None, variable: str = "marker"):
-
-        # TODO fill or filled parameter?
-        # allow singletons? e.g. map_marker(shapes="o", filled=[True, False])?
-        # allow full matplotlib fillstyle API?
 
         if isinstance(shapes, list):
             shapes = [MarkerStyle(s) for s in shapes]
@@ -443,14 +435,13 @@ class MarkerSemantic(DiscreteSemantic):
             ])
             s += 1
 
-        # TODO use filled (maybe have different defaults depending on fill/nofill?)
         markers = [MarkerStyle(m) for m in markers]
 
         # TODO or have this as an infinite generator?
         return markers[:n]
 
 
-# TODO or linestyle?
+# TODO or LineStyle?
 class DashSemantic(DiscreteSemantic):
 
     def __init__(
@@ -560,20 +551,21 @@ class HatchSemantic(DiscreteSemantic):
     ...
 
 
-# TODO allow subclass to define validation function for values?
-
-
+# TODO markersize? pointsize? How to specify diameter but scale area?
 class AreaSemantic(ContinuousSemantic):
     ...
 
 
 class WidthSemantic(ContinuousSemantic):
-
     _default_range = .2, .8
 
 
-class LineWidthSemantic(ContinuousSemantic):
+# TODO or opacity?
+class AlphaSemantic(ContinuousSemantic):
+    _default_range = .3, 1
 
+
+class LineWidthSemantic(ContinuousSemantic):
     @property
     def default_range(self) -> tuple[float, float]:
         base = mpl.rcParams["lines.linewidth"]
@@ -581,17 +573,11 @@ class LineWidthSemantic(ContinuousSemantic):
 
 
 class EdgeWidthSemantic(ContinuousSemantic):
-
     @property
     def default_range(self) -> tuple[float, float]:
         # TODO use patch.linewidth or lines.markeredgewidth here?
         base = mpl.rcParams["patch.linewidth"]
         return base * .5, base * 2
-
-
-# TODO or opacity?
-class AlphaSemantic(ContinuousSemantic):
-    ...
 
 
 # ==================================================================================== #
@@ -626,10 +612,6 @@ class NormedMapping(SemanticMapping):
 
     def __call__(self, x: Any) -> Any:
 
-        # TODO can we work out whether transform is vectorized and use it that way?
-        # (Or ensure that it is, since we control it?)
-        # TODO note that matplotlib Normalize is going to return a masked array
-        # maybe this is fine since we're handing the output off to matplotlib?
         if isinstance(x, pd.Series):
             # Compatability for matplotlib<3.4.3
             # https://github.com/matplotlib/matplotlib/pull/20511
