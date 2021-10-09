@@ -116,15 +116,15 @@ class Line(Mark):
     # i.e. Line needs to aggregate by x, but not plot by it
     # also how will this get parametrized to support orient=?
     # TODO will this sort by the orient dimension like lineplot currently does?
-    grouping_vars = ["color", "marker", "dash", "linewidth"]
-    supports = ["color", "marker", "dash", "linewidth"]
+    grouping_vars = ["color", "marker", "linestyle", "linewidth"]
+    supports = ["color", "marker", "linestyle", "linewidth"]
 
     def _plot_split(self, keys, data, ax, mappings, kws):
 
         if "color" in keys:
             kws["color"] = mappings["color"](keys["color"])
-        if "dash" in keys:
-            kws["linestyle"] = mappings["dash"](keys["dash"])
+        if "linestyle" in keys:
+            kws["linestyle"] = mappings["linestyle"](keys["linestyle"])
         if "linewidth" in keys:
             kws["linewidth"] = mappings["linewidth"](keys["linewidth"])
 

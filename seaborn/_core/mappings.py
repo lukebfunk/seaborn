@@ -441,13 +441,12 @@ class MarkerSemantic(DiscreteSemantic):
         return markers[:n]
 
 
-# TODO or LineStyle?
-class DashSemantic(DiscreteSemantic):
+class LineStyleSemantic(DiscreteSemantic):
 
     def __init__(
         self,
         styles: list | dict | None = None,
-        variable: str = "dash pattern"
+        variable: str = "linestyle"
     ):
         # TODO full types
 

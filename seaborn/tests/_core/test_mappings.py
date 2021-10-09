@@ -14,8 +14,8 @@ from seaborn._core.scales import ScaleWrapper, CategoricalScale
 from seaborn._core.mappings import (
     BooleanSemantic,
     ColorSemantic,
-    DashSemantic,
     MarkerSemantic,
+    LineStyleSemantic,
     WidthSemantic,
     EdgeWidthSemantic,
     LineWidthSemantic,
@@ -360,20 +360,20 @@ class DiscreteBase:
             self.assert_equal(have, want)
 
 
-class TestDashes(DiscreteBase):
+class TestLineStyle(DiscreteBase):
 
-    semantic = DashSemantic
+    semantic = LineStyleSemantic
 
     def assert_equal(self, a, b):
 
-        a = DashSemantic._get_dash_pattern(a)
-        b = DashSemantic._get_dash_pattern(b)
+        a = self.semantic()._get_dash_pattern(a)
+        b = self.semantic()._get_dash_pattern(b)
         assert a == b
 
     def test_unique_dashes(self):
 
         n = 24
-        dashes = DashSemantic()._default_values(n)
+        dashes = self.semantic()._default_values(n)
 
         assert len(dashes) == n
         assert len(set(dashes)) == n
@@ -396,9 +396,9 @@ class TestDashes(DiscreteBase):
 
     def test_provided_dict_with_missing(self):
 
-        m = DashSemantic({})
+        m = self.semantic({})
         keys = pd.Series(["a", 1])
-        err = r"Missing dash pattern for following value\(s\): 1, 'a'"
+        err = r"Missing linestyle for following value\(s\): 1, 'a'"
         with pytest.raises(ValueError, match=err):
             m.setup(keys)
 

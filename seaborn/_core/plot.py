@@ -17,7 +17,7 @@ from seaborn._core.mappings import (
     ColorSemantic,
     BooleanSemantic,
     MarkerSemantic,
-    DashSemantic,
+    LineStyleSemantic,
     LineWidthSemantic,
 )
 from seaborn._core.scales import (
@@ -53,7 +53,7 @@ SEMANTICS = {  # TODO should this be pluggable?
     "facecolor": ColorSemantic(),
     "edgecolor": ColorSemantic(),
     "marker": MarkerSemantic(),
-    "dash": DashSemantic(),
+    "linestyle": LineStyleSemantic(),
     "fill": BooleanSemantic(),
     "linewidth": LineWidthSemantic(),
 }
@@ -334,15 +334,15 @@ class Plot:
             self.scale_categorical("marker", order=order)
         return self
 
-    def map_dash(
+    def map_linestyle(
         self,
         styles: list | dict | None = None,
         order: OrderSpec = None,
     ) -> Plot:
 
-        self._semantics["dash"] = DashSemantic(styles, variable="dash pattern")
+        self._semantics["linestyle"] = LineStyleSemantic(styles, variable="linestyle")
         if order is not None:
-            self.scale_categorical("dash", order=order)
+            self.scale_categorical("linestyle", order=order)
         return self
 
     def map_linewidth(
