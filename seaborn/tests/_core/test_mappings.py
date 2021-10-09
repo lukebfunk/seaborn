@@ -569,6 +569,7 @@ class ContinuousBase:
         norm = mpl.colors.LogNorm(1, 100)
         scale = ScaleWrapper(mpl.scale.LinearScale("x"), "numeric", norm=norm)
         y = self.semantic().setup(x, scale)(x)
+        x = np.asarray(x)  # matplotlib<3.4.3 compatability
         expected = self.transform(norm(x), *self.semantic().default_range)
         assert_array_equal(y, expected)
 

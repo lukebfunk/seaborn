@@ -154,7 +154,7 @@ class ContinuousSemantic(Semantic):
 
     norm: Normalize
     transform: Callable  # TODO sort out argument typing in a way that satisfies mypy
-    _default_range: tuple[float, float] = 0, 1
+    _default_range: tuple[float, float] = (0, 1)
 
     def __init__(
         self,
@@ -619,7 +619,7 @@ class LookupMapping(SemanticMapping):
 
 class NormedMapping(SemanticMapping):
 
-    def __init__(self, norm: Normalize, transform: Callable[[float], Any]):
+    def __init__(self, norm: Normalize, transform: Callable[[ArrayLike], Any]):
 
         self.norm = norm
         self.transform = transform
@@ -630,4 +630,8 @@ class NormedMapping(SemanticMapping):
         # (Or ensure that it is, since we control it?)
         # TODO note that matplotlib Normalize is going to return a masked array
         # maybe this is fine since we're handing the output off to matplotlib?
+        if isinstance(x, pd.Series):
+            # Compatability for matplotlib<3.4.3
+            # https://github.com/matplotlib/matplotlib/pull/20511
+            x = np.asarray(x)
         return self.transform(self.norm(x))
