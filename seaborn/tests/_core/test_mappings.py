@@ -47,6 +47,14 @@ class TestColor:
     def cat_order(self, cat_vector):
         return categorical_order(cat_vector)
 
+    @pytest.fixture
+    def dt_num_vector(self, long_df):
+        return long_df["t"]
+
+    @pytest.fixture
+    def dt_cat_vector(self, long_df):
+        return long_df["d"]
+
     def test_categorical_default_palette(self, cat_vector, cat_order):
 
         expected = dict(zip(cat_order, color_palette()))
@@ -301,6 +309,60 @@ class TestColor:
         m = ColorSemantic(palette=cmap).setup(num_vector)
         expected_colors = cmap(num_norm(num_vector.to_numpy()))[:, :3]
         assert_array_equal(m(num_vector.to_numpy()), expected_colors)
+
+    def test_datetime_default_palette(self, dt_num_vector):
+
+        m = ColorSemantic().setup(dt_num_vector)
+        mapped = m(dt_num_vector)
+
+        tmp = dt_num_vector - dt_num_vector.min()
+        normed = tmp / tmp.max()
+
+        expected_cmap = color_palette("ch:", as_cmap=True)
+        expected = expected_cmap(normed)
+
+        assert len(mapped) == len(expected)
+        for have, want in zip(mapped, expected):
+            assert to_rgb(have) == to_rgb(want)
+
+    def test_datetime_specified_palette(self, dt_num_vector):
+
+        palette = "mako"
+        m = ColorSemantic(palette=palette).setup(dt_num_vector)
+        mapped = m(dt_num_vector)
+
+        tmp = dt_num_vector - dt_num_vector.min()
+        normed = tmp / tmp.max()
+
+        expected_cmap = color_palette(palette, as_cmap=True)
+        expected = expected_cmap(normed)
+
+        assert len(mapped) == len(expected)
+        for have, want in zip(mapped, expected):
+            assert to_rgb(have) == to_rgb(want)
+
+    @pytest.mark.xfail(reason="No support for norms in datetime scale yet")
+    def test_datetime_norm_limits(self, dt_num_vector):
+
+        norm = (
+            dt_num_vector.min() - pd.Timedelta(2, "m"),
+            dt_num_vector.max() - pd.Timedelta(1, "m"),
+        )
+        palette = "mako"
+
+        scale = ScaleWrapper(LinearScale("color"), "datetime", norm)
+        m = ColorSemantic(palette=palette).setup(dt_num_vector, scale)
+        mapped = m(dt_num_vector)
+
+        tmp = dt_num_vector - norm[0]
+        normed = tmp / norm[1]
+
+        expected_cmap = color_palette(palette, as_cmap=True)
+        expected = expected_cmap(normed)
+
+        assert len(mapped) == len(expected)
+        for have, want in zip(mapped, expected):
+            assert to_rgb(have) == to_rgb(want)
 
     def test_bad_palette(self, num_vector):
 
@@ -582,6 +644,25 @@ class ContinuousBase:
         scale = ScaleWrapper(mpl.scale.LinearScale("x"), "numeric", norm=norm)
         with pytest.raises(ValueError):
             self.semantic().setup(x, scale)
+
+    def test_default_datetime(self):
+
+        x = pd.Series(np.array([10000, 10100, 10101], dtype="datetime64[D]"))
+        y = self.semantic().setup(x)(x)
+        tmp = x - x.min()
+        normed = tmp / tmp.max()
+        expected = self.transform(normed, *self.semantic().default_range)
+        assert_array_equal(y, expected)
+
+    def test_range_datetime(self):
+
+        values = .2, .9
+        x = pd.Series(np.array([10000, 10100, 10101], dtype="datetime64[D]"))
+        y = self.semantic(values).setup(x)(x)
+        tmp = x - x.min()
+        normed = tmp / tmp.max()
+        expected = self.transform(normed, *values)
+        assert_array_equal(y, expected)
 
 
 class TestWidth(ContinuousBase):

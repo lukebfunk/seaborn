@@ -218,7 +218,13 @@ class ContinuousSemantic(Semantic):
             return LookupMapping(mapping_dict)
 
         if not isinstance(values, tuple):
-            raise TypeError()  # TODO
+            # What to do here? In existing code we can pass numeric data but
+            # then request a categorical mapping by using a list or dict for values.
+            # That is currently not supported because the scale.type dominates in
+            # the variable type inference. We should basically not get here, either
+            # passing a list/dict implies a categorical mapping, or the an explicit
+            # numeric mapping with a categorical set of values should raise before this.
+            raise TypeError()  # TODO  FIXME
 
         if map_type == "numeric":
 
@@ -228,11 +234,13 @@ class ContinuousSemantic(Semantic):
         elif map_type == "datetime":
 
             if scale is not None:
+                # TODO should this happen upstream, or alternatively inside the norm?
                 data = scale.cast(data)
             data = mpl.dates.date2num(data.dropna())
             prepare = lambda x: mpl.dates.date2num(pd.to_datetime(x))
 
             # TODO if norm is tuple, convert to datetime and then to numbers?
+            # (Or handle that upstream within the DateTimeScale? Probably do this.)
 
         transform = RangeTransform(values)
 
@@ -266,8 +274,17 @@ class ColorSemantic(Semantic):
         norm = None if scale is None else scale.norm
         order = None if scale is None else scale.order
 
-        # TODO We need to add some input checks ...
+        # TODO We also need to add some input checks ...
         # e.g. specifying a numeric scale and a qualitative colormap should fail nicely.
+
+        # TODO FIXME:mappings
+        # In current function interface, we can assign a numeric variable to hue and set
+        # either a named qualitative palette or a list/dict of colors.
+        # In current implementation here, that raises with an unpleasant error.
+        # The problem is that the scale.type currently dominates.
+        # How to distinguish between "user set numeric scale and qualitative palette,
+        # this is an error" from "user passed numeric values but did not set explicit
+        # scale, then asked for a qualitative mapping by the form of the palette?
 
         map_type = self._infer_map_type(scale, palette, data)
 

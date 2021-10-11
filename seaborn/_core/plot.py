@@ -561,6 +561,9 @@ class Plot:
 
     def _setup_scales(self) -> None:
 
+        # TODO currently typoing variable name in `scale_*`, or scaling a variable that
+        # isn't defined anywhere, silently does nothing. We should raise/warn on that.
+
         variables = set(self._data.frame)
         for layer in self._layers:
             variables |= set(layer.data.frame)
