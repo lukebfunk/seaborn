@@ -175,7 +175,7 @@ class ContinuousSemantic(Semantic):
     ) -> VarType:
         """Determine how to implement the mapping."""
         map_type: VarType
-        if scale is not None:
+        if scale is not None and scale.type_declared:
             return scale.type
         elif isinstance(values, (list, dict)):
             return VarType("categorical")
@@ -403,7 +403,7 @@ class ColorSemantic(Semantic):
     ) -> VarType:
         """Determine how to implement a color mapping."""
         map_type: VarType
-        if scale is not None:
+        if scale is not None and scale.type_declared:
             return scale.type
         elif palette in QUAL_PALETTES:
             map_type = VarType("categorical")

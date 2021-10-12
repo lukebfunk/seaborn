@@ -410,7 +410,7 @@ class Plot:
             # TODO what about when we want to infer the scale from the norm?
             # e.g. currently you pass LogNorm to get a log normalization...
             norm = norm_from_scale(scale, norm)
-        self._scales[var] = ScaleWrapper(scale, "numeric", norm=norm)
+        self._scales[var] = ScaleWrapper(scale, "numeric", norm)
         return self
 
     def scale_categorical(
@@ -578,7 +578,7 @@ class Plot:
             var_type = variable_type(all_values)
 
             # TODO eventually this will be updating a different dictionary
-            self._scales[var] = ScaleWrapper(mpl.scale.LinearScale(var), var_type)
+            self._scales[var] = ScaleWrapper.from_inferred_type(var_type)
 
         # TODO Think about how this is going to handle situations where we have
         # e.g. ymin and ymax but no y specified. I think in that situation one

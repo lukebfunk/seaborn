@@ -23,7 +23,7 @@ class ScaleWrapper:
     def __init__(
         self,
         scale: ScaleBase,
-        type: VarType | VariableType,  # TODO don't use builtin name?
+        type: VarType | VariableType,  # TODO don't use builtin name?  TODO saner typing
         norm: tuple[float | None, float | None] | Normalize | None = None,
     ):
 
@@ -31,8 +31,8 @@ class ScaleWrapper:
         self.forward = transform.transform
         self.reverse = transform.inverted().transform
 
-        # TODO can't we get type from the scale object in most cases?
-        self.type = type if type is None else VarType(type)
+        self.type = VarType(type)
+        self.type_declared = True
 
         if norm is None:
             norm = norm_from_scale(scale, norm)
@@ -50,6 +50,17 @@ class ScaleWrapper:
         # As a workaround, stop the recursion at this level with older matplotlibs.
         def __deepcopy__(self, memo=None):
             return copy(self)
+
+    @classmethod
+    def from_inferred_type(cls, var_type: VarType):
+
+        if var_type == "numeric":
+            return cls(LinearScale(), "numeric", None)
+        elif var_type == "categorical":
+            return cls(CategoricalScale(), "categorical", None)
+        elif var_type == "datetime":
+            # TODO add DateTimeNorm that converts to numeric first
+            return cls(DatetimeScale(), "datetime", None)
 
     @property
     def order(self):
