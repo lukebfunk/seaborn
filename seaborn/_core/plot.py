@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt  # TODO defer import into Plot.show()
 
-from seaborn._core.rules import variable_type, categorical_order
+from seaborn._core.rules import categorical_order
 from seaborn._core.data import PlotData
 from seaborn._core.subplots import Subplots
 from seaborn._core.mappings import (
@@ -575,10 +575,9 @@ class Plot:
                 # Because we only want to concat if a variable was *added* here
                 *(y.data.frame.get(var) for y in self._layers if var in y.variables)
             ], ignore_index=True)
-            var_type = variable_type(all_values)
 
             # TODO eventually this will be updating a different dictionary
-            self._scales[var] = ScaleWrapper.from_inferred_type(var_type)
+            self._scales[var] = ScaleWrapper.from_inferred_type(all_values)
 
         # TODO Think about how this is going to handle situations where we have
         # e.g. ymin and ymax but no y specified. I think in that situation one
@@ -828,7 +827,7 @@ class Plot:
             # TODO FIXME:feedback wrap this in a try/except and reraise with
             # more information about what variable caused the problem
             values = scale.cast(values)
-            axis_obj.update_units(categorical_order(values))
+            axis_obj.update_units(categorical_order(values))  # TODO think carefully
 
             # TODO it seems wrong that we need to cast to float here,
             # but convert_units sometimes outputs an object array (e.g. w/Int64 values)

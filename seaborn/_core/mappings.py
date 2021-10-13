@@ -73,7 +73,7 @@ class Semantic:
     def setup(
         self,
         data: Series,
-        scale: Scale | None = None,
+        scale: Scale,
     ) -> SemanticMapping:
 
         raise NotImplementedError()
@@ -117,7 +117,7 @@ class DiscreteSemantic(Semantic):
     def setup(
         self,
         data: Series,
-        scale: Scale | None = None,
+        scale: Scale,
     ) -> LookupMapping:
 
         values = self._values
@@ -186,7 +186,7 @@ class ContinuousSemantic(Semantic):
     def setup(
         self,
         data: Series,
-        scale: Scale | None = None,
+        scale: Scale,
     ) -> NormedMapping | LookupMapping:
 
         values = self.default_range if self._values is None else self._values
@@ -265,7 +265,7 @@ class ColorSemantic(Semantic):
     def setup(
         self,
         data: Series,
-        scale: Scale | None = None,
+        scale: Scale,
     ) -> LookupMapping | NormedMapping:
         """Infer the type of mapping to use and define it using this vector of data."""
         mapping: LookupMapping | NormedMapping

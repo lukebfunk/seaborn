@@ -34,10 +34,11 @@ class TestColor:
         return categorical_order(num_vector)
 
     @pytest.fixture
-    def num_norm(self, num_vector):
+    def num_scale(self, num_vector):
         norm = Normalize()
         norm.autoscale(num_vector)
-        return norm
+        scale = ScaleWrapper.from_inferred_type(num_vector)
+        return scale
 
     @pytest.fixture
     def cat_vector(self, long_df):
@@ -58,7 +59,8 @@ class TestColor:
     def test_categorical_default_palette(self, cat_vector, cat_order):
 
         expected = dict(zip(cat_order, color_palette()))
-        m = ColorSemantic().setup(cat_vector)
+        scale = ScaleWrapper.from_inferred_type(cat_vector)
+        m = ColorSemantic().setup(cat_vector, scale)
 
         for level, color in expected.items():
             assert m(level) == color
@@ -66,9 +68,11 @@ class TestColor:
     def test_categorical_default_palette_large(self):
 
         vector = pd.Series(list("abcdefghijklmnopqrstuvwxyz"))
+        scale = ScaleWrapper.from_inferred_type(vector)
+        scale = ScaleWrapper.from_inferred_type(vector)
         n_colors = len(vector)
         expected = dict(zip(vector, color_palette("husl", n_colors)))
-        m = ColorSemantic().setup(vector)
+        m = ColorSemantic().setup(vector, scale)
 
         for level, color in expected.items():
             assert m(level) == color
@@ -76,7 +80,8 @@ class TestColor:
     def test_categorical_named_palette(self, cat_vector, cat_order):
 
         palette = "Blues"
-        m = ColorSemantic(palette=palette).setup(cat_vector)
+        scale = ScaleWrapper.from_inferred_type(cat_vector)
+        m = ColorSemantic(palette=palette).setup(cat_vector, scale)
 
         colors = color_palette(palette, len(cat_order))
         expected = dict(zip(cat_order, colors))
@@ -86,7 +91,8 @@ class TestColor:
     def test_categorical_list_palette(self, cat_vector, cat_order):
 
         palette = color_palette("Reds", len(cat_order))
-        m = ColorSemantic(palette=palette).setup(cat_vector)
+        scale = ScaleWrapper.from_inferred_type(cat_vector)
+        m = ColorSemantic(palette=palette).setup(cat_vector, scale)
 
         expected = dict(zip(cat_order, palette))
         for level, color in expected.items():
@@ -95,7 +101,8 @@ class TestColor:
     def test_categorical_implied_by_list_palette(self, num_vector, num_order):
 
         palette = color_palette("Reds", len(num_order))
-        m = ColorSemantic(palette=palette).setup(num_vector)
+        scale = ScaleWrapper.from_inferred_type(num_vector)
+        m = ColorSemantic(palette=palette).setup(num_vector, scale)
 
         expected = dict(zip(num_order, palette))
         for level, color in expected.items():
@@ -104,7 +111,8 @@ class TestColor:
     def test_categorical_dict_palette(self, cat_vector, cat_order):
 
         palette = dict(zip(cat_order, color_palette("Greens")))
-        m = ColorSemantic(palette=palette).setup(cat_vector)
+        scale = ScaleWrapper.from_inferred_type(cat_vector)
+        m = ColorSemantic(palette=palette).setup(cat_vector, scale)
         assert m.mapping == palette
 
         for level, color in palette.items():
@@ -113,7 +121,8 @@ class TestColor:
     def test_categorical_implied_by_dict_palette(self, num_vector, num_order):
 
         palette = dict(zip(num_order, color_palette("Greens")))
-        m = ColorSemantic(palette=palette).setup(num_vector)
+        scale = ScaleWrapper.from_inferred_type(num_vector)
+        m = ColorSemantic(palette=palette).setup(num_vector, scale)
         assert m.mapping == palette
 
         for level, color in palette.items():
@@ -122,8 +131,9 @@ class TestColor:
     def test_categorical_dict_with_missing_keys(self, cat_vector, cat_order):
 
         palette = dict(zip(cat_order[1:], color_palette("Purples")))
+        scale = ScaleWrapper.from_inferred_type(cat_vector)
         with pytest.raises(ValueError):
-            ColorSemantic(palette=palette).setup(cat_vector)
+            ColorSemantic(palette=palette).setup(cat_vector, scale)
 
     def test_categorical_list_too_short(self, cat_vector, cat_order):
 
@@ -131,8 +141,9 @@ class TestColor:
         palette = color_palette("Oranges", n)
         msg = rf"The edgecolor list has fewer values \({n}\) than needed \({n + 1}\)"
         m = ColorSemantic(palette=palette, variable="edgecolor")
+        scale = ScaleWrapper.from_inferred_type(cat_vector)
         with pytest.warns(UserWarning, match=msg):
-            m.setup(cat_vector)
+            m.setup(cat_vector, scale)
 
     @pytest.mark.xfail(reason="Need decision on new behavior")
     def test_categorical_list_too_long(self, cat_vector, cat_order):
@@ -147,7 +158,7 @@ class TestColor:
     def test_categorical_with_ordered_scale(self, cat_vector):
 
         cat_order = list(cat_vector.unique()[::-1])
-        scale = ScaleWrapper(CategoricalScale(order=cat_order), "categorical")
+        scale = ScaleWrapper(CategoricalScale("color", order=cat_order), "categorical")
 
         palette = "deep"
         colors = color_palette(palette, len(cat_order))
@@ -161,7 +172,7 @@ class TestColor:
 
     def test_categorical_implied_by_scale(self, num_vector, num_order):
 
-        scale = ScaleWrapper(CategoricalScale(), "categorical")
+        scale = ScaleWrapper(CategoricalScale("color"), "categorical")
 
         palette = "deep"
         colors = color_palette(palette, len(num_order))
@@ -180,7 +191,7 @@ class TestColor:
             order[[0, 1]] = order[[1, 0]]
         order = list(order)
 
-        scale = ScaleWrapper(CategoricalScale(order=order), "categorical")
+        scale = ScaleWrapper(CategoricalScale("color", order=order), "categorical")
 
         palette = "deep"
         colors = color_palette(palette, len(order))
@@ -196,10 +207,11 @@ class TestColor:
 
         new_order = list(reversed(cat_order))
         new_vector = cat_vector.astype("category").cat.set_categories(new_order)
+        scale = ScaleWrapper.from_inferred_type(new_vector)
 
         expected = dict(zip(new_order, color_palette()))
 
-        m = ColorSemantic().setup(new_vector)
+        m = ColorSemantic().setup(new_vector, scale)
 
         for level, color in expected.items():
             assert m(level) == color
@@ -208,10 +220,11 @@ class TestColor:
 
         new_vector = num_vector.astype("category")
         new_order = categorical_order(new_vector)
+        scale = ScaleWrapper.from_inferred_type(new_vector)
 
         expected = dict(zip(new_order, color_palette()))
 
-        m = ColorSemantic().setup(new_vector)
+        m = ColorSemantic().setup(new_vector, scale)
 
         for level, color in expected.items():
             assert m(level) == color
@@ -220,15 +233,17 @@ class TestColor:
 
         palette = "bright"
         expected = dict(zip(num_order, color_palette(palette)))
-        m = ColorSemantic(palette=palette).setup(num_vector)
+        scale = ScaleWrapper.from_inferred_type(num_vector)
+        m = ColorSemantic(palette=palette).setup(num_vector, scale)
         for level, color in expected.items():
             assert m(level) == color
 
     def test_categorical_from_binary_data(self):
 
         vector = pd.Series([1, 0, 0, 0, 1, 1, 1])
+        scale = ScaleWrapper.from_inferred_type(vector)
         expected_palette = dict(zip([0, 1], color_palette()))
-        m = ColorSemantic().setup(vector)
+        m = ColorSemantic().setup(vector, scale)
 
         for level, color in expected_palette.items():
             assert m(level) == color
@@ -236,44 +251,48 @@ class TestColor:
         first_color, *_ = color_palette()
 
         for val in [0, 1]:
-            m = ColorSemantic().setup(pd.Series([val] * 4))
+            x = pd.Series([val] * 4)
+            scale = ScaleWrapper.from_inferred_type(x)
+            m = ColorSemantic().setup(x, scale)
             assert m(val) == first_color
 
     def test_categorical_multi_lookup(self):
 
         x = pd.Series(["a", "b", "c"])
         colors = color_palette(n_colors=len(x))
-        m = ColorSemantic().setup(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        m = ColorSemantic().setup(x, scale)
         assert_series_equal(m(x), pd.Series(colors))
 
     def test_categorical_multi_lookup_categorical(self):
 
         x = pd.Series(["a", "b", "c"]).astype("category")
         colors = color_palette(n_colors=len(x))
-        m = ColorSemantic().setup(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        m = ColorSemantic().setup(x, scale)
         assert_series_equal(m(x), pd.Series(colors))
 
-    def test_numeric_default_palette(self, num_vector, num_order, num_norm):
+    def test_numeric_default_palette(self, num_vector, num_order, num_scale):
 
-        m = ColorSemantic().setup(num_vector)
+        m = ColorSemantic().setup(num_vector, num_scale)
         expected_cmap = color_palette("ch:", as_cmap=True)
         for level in num_order:
-            assert m(level) == to_rgb(expected_cmap(num_norm(level)))
+            assert m(level) == to_rgb(expected_cmap(num_scale.norm(level)))
 
-    def test_numeric_named_palette(self, num_vector, num_order, num_norm):
+    def test_numeric_named_palette(self, num_vector, num_order, num_scale):
 
         palette = "viridis"
-        m = ColorSemantic(palette=palette).setup(num_vector)
+        m = ColorSemantic(palette=palette).setup(num_vector, num_scale)
         expected_cmap = color_palette(palette, as_cmap=True)
         for level in num_order:
-            assert m(level) == to_rgb(expected_cmap(num_norm(level)))
+            assert m(level) == to_rgb(expected_cmap(num_scale.norm(level)))
 
-    def test_numeric_colormap_palette(self, num_vector, num_order, num_norm):
+    def test_numeric_colormap_palette(self, num_vector, num_order, num_scale):
 
         cmap = color_palette("rocket", as_cmap=True)
-        m = ColorSemantic(palette=cmap).setup(num_vector)
+        m = ColorSemantic(palette=cmap).setup(num_vector, num_scale)
         for level in num_order:
-            assert m(level) == to_rgb(cmap(num_norm(level)))
+            assert m(level) == to_rgb(cmap(num_scale.norm(level)))
 
     def test_numeric_norm_limits(self, num_vector, num_order):
 
@@ -295,24 +314,24 @@ class TestColor:
         for level in num_order:
             assert m(level) == to_rgb(cmap(norm(level)))
 
-    def test_numeric_dict_palette_with_norm(self, num_vector, num_order, num_norm):
+    def test_numeric_dict_palette_with_norm(self, num_vector, num_order, num_scale):
 
         palette = dict(zip(num_order, color_palette()))
-        scale = ScaleWrapper(LinearScale("color"), "numeric", norm=num_norm)
-        m = ColorSemantic(palette=palette).setup(num_vector, scale)
+        m = ColorSemantic(palette=palette).setup(num_vector, num_scale)
         for level, color in palette.items():
             assert m(level) == to_rgb(color)
 
-    def test_numeric_multi_lookup(self, num_vector, num_norm):
+    def test_numeric_multi_lookup(self, num_vector, num_scale):
 
         cmap = color_palette("mako", as_cmap=True)
-        m = ColorSemantic(palette=cmap).setup(num_vector)
-        expected_colors = cmap(num_norm(num_vector.to_numpy()))[:, :3]
+        m = ColorSemantic(palette=cmap).setup(num_vector, num_scale)
+        expected_colors = cmap(num_scale.norm(num_vector.to_numpy()))[:, :3]
         assert_array_equal(m(num_vector.to_numpy()), expected_colors)
 
     def test_datetime_default_palette(self, dt_num_vector):
 
-        m = ColorSemantic().setup(dt_num_vector)
+        scale = ScaleWrapper.from_inferred_type(dt_num_vector)
+        m = ColorSemantic().setup(dt_num_vector, scale)
         mapped = m(dt_num_vector)
 
         tmp = dt_num_vector - dt_num_vector.min()
@@ -328,7 +347,8 @@ class TestColor:
     def test_datetime_specified_palette(self, dt_num_vector):
 
         palette = "mako"
-        m = ColorSemantic(palette=palette).setup(dt_num_vector)
+        scale = ScaleWrapper.from_inferred_type(dt_num_vector)
+        m = ColorSemantic(palette=palette).setup(dt_num_vector, scale)
         mapped = m(dt_num_vector)
 
         tmp = dt_num_vector - dt_num_vector.min()
@@ -364,10 +384,10 @@ class TestColor:
         for have, want in zip(mapped, expected):
             assert to_rgb(have) == to_rgb(want)
 
-    def test_bad_palette(self, num_vector):
+    def test_bad_palette(self, num_vector, num_scale):
 
         with pytest.raises(ValueError):
-            ColorSemantic(palette="not_a_palette").setup(num_vector)
+            ColorSemantic(palette="not_a_palette").setup(num_vector, num_scale)
 
     def test_bad_norm(self, num_vector):
 
@@ -382,7 +402,8 @@ class DiscreteBase:
     def test_none_provided(self):
 
         keys = pd.Series(["a", "b", "c"])
-        m = self.semantic().setup(keys)
+        scale = ScaleWrapper.from_inferred_type(keys)
+        m = self.semantic().setup(keys, scale)
 
         defaults = self.semantic()._default_values(len(keys))
 
@@ -397,7 +418,8 @@ class DiscreteBase:
     def _test_provided_list(self, values):
 
         keys = pd.Series(["a", "b", "c", "d"])
-        m = self.semantic(values).setup(keys)
+        scale = ScaleWrapper.from_inferred_type(keys)
+        m = self.semantic(values).setup(keys, scale)
 
         for key, want in zip(keys, values):
             self.assert_equal(m(key), want)
@@ -410,8 +432,9 @@ class DiscreteBase:
     def _test_provided_dict(self, values):
 
         keys = pd.Series(["a", "b", "c", "d"])
+        scale = ScaleWrapper.from_inferred_type(keys)
         mapping = dict(zip(keys, values))
-        m = self.semantic(mapping).setup(keys)
+        m = self.semantic(mapping).setup(keys, scale)
 
         for key, want in mapping.items():
             self.assert_equal(m(key), want)
@@ -460,9 +483,10 @@ class TestLineStyle(DiscreteBase):
 
         m = self.semantic({})
         keys = pd.Series(["a", 1])
+        scale = ScaleWrapper.from_inferred_type(keys)
         err = r"Missing linestyle for following value\(s\): 1, 'a'"
         with pytest.raises(ValueError, match=err):
-            m.setup(keys)
+            m.setup(keys, scale)
 
 
 class TestMarker(DiscreteBase):
@@ -506,9 +530,10 @@ class TestMarker(DiscreteBase):
 
         m = MarkerSemantic({})
         keys = pd.Series(["a", 1])
+        scale = ScaleWrapper.from_inferred_type(keys)
         err = r"Missing marker for following value\(s\): 1, 'a'"
         with pytest.raises(ValueError, match=err):
-            m.setup(keys)
+            m.setup(keys, scale)
 
 
 class TestBoolean:
@@ -516,7 +541,8 @@ class TestBoolean:
     def test_default(self):
 
         x = pd.Series(["a", "b"])
-        m = BooleanSemantic().setup(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        m = BooleanSemantic().setup(x, scale)
         assert m("a") is True
         assert m("b") is False
 
@@ -525,8 +551,9 @@ class TestBoolean:
         x = pd.Series(["a", "b", "c"])
         s = BooleanSemantic(variable="fill")
         msg = "There are only two possible fill values, so they will cycle"
+        scale = ScaleWrapper.from_inferred_type(x)
         with pytest.warns(UserWarning, match=msg):
-            m = s.setup(x)
+            m = s.setup(x, scale)
         assert m("a") is True
         assert m("b") is False
         assert m("c") is True
@@ -535,7 +562,8 @@ class TestBoolean:
 
         x = pd.Series(["a", "b", "c"])
         values = [True, True, False]
-        m = BooleanSemantic(values).setup(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        m = BooleanSemantic(values).setup(x, scale)
         for k, v in zip(x, values):
             assert m(k) is v
 
@@ -555,7 +583,8 @@ class ContinuousBase:
     def test_default_numeric(self):
 
         x = pd.Series([-1, .4, 2, 1.2])
-        y = self.semantic().setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic().setup(x, scale)(x)
         normed = self.norm(x, x.min(), x.max())
         expected = self.transform(normed, *self.semantic().default_range)
         assert_array_equal(y, expected)
@@ -563,7 +592,8 @@ class ContinuousBase:
     def test_default_categorical(self):
 
         x = pd.Series(["a", "c", "b", "c"])
-        y = self.semantic().setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic().setup(x, scale)(x)
         normed = np.array([1, .5, 0, .5])
         expected = self.transform(normed, *self.semantic().default_range)
         assert_array_equal(y, expected)
@@ -572,34 +602,38 @@ class ContinuousBase:
 
         values = (1, 5)
         x = pd.Series([-1, .4, 2, 1.2])
-        y = self.semantic(values).setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         normed = self.norm(x, x.min(), x.max())
         expected = self.transform(normed, *values)
         assert_array_equal(y, expected)
 
     def test_range_categorical(self):
 
-        x = pd.Series(["a", "c", "b", "c"])
         values = (1, 5)
-        y = self.semantic(values).setup(x)(x)
+        x = pd.Series(["a", "c", "b", "c"])
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         normed = np.array([1, .5, 0, .5])
         expected = self.transform(normed, *values)
         assert_array_equal(y, expected)
 
     def test_list_numeric(self):
 
-        x = pd.Series([2, 500, 10, 500])
         values = [.3, .8, .5]
+        x = pd.Series([2, 500, 10, 500])
         expected = [.3, .5, .8, .5]
-        y = self.semantic(values).setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         assert_array_equal(y, expected)
 
     def test_list_categorical(self):
 
-        x = pd.Series(["a", "c", "b", "c"])
         values = [.2, .6, .4]
+        x = pd.Series(["a", "c", "b", "c"])
         expected = [.2, .6, .4, .6]
-        y = self.semantic(values).setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         assert_array_equal(y, expected)
 
     def test_list_implies_categorical(self):
@@ -607,21 +641,24 @@ class ContinuousBase:
         x = pd.Series([2, 500, 10, 500])
         values = [.2, .6, .4]
         expected = [.2, .4, .6, .4]
-        y = self.semantic(values).setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         assert_array_equal(y, expected)
 
     def test_dict_numeric(self):
 
         x = pd.Series([2, 500, 10, 500])
         values = {2: .3, 500: .5, 10: .8}
-        y = self.semantic(values).setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         assert_array_equal(y, x.map(values))
 
     def test_dict_categorical(self):
 
         x = pd.Series(["a", "c", "b", "c"])
         values = {"a": .3, "b": .5, "c": .8}
-        y = self.semantic(values).setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         assert_array_equal(y, x.map(values))
 
     def test_norm_numeric(self):
@@ -648,7 +685,8 @@ class ContinuousBase:
     def test_default_datetime(self):
 
         x = pd.Series(np.array([10000, 10100, 10101], dtype="datetime64[D]"))
-        y = self.semantic().setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic().setup(x, scale)(x)
         tmp = x - x.min()
         normed = tmp / tmp.max()
         expected = self.transform(normed, *self.semantic().default_range)
@@ -658,7 +696,8 @@ class ContinuousBase:
 
         values = .2, .9
         x = pd.Series(np.array([10000, 10100, 10101], dtype="datetime64[D]"))
-        y = self.semantic(values).setup(x)(x)
+        scale = ScaleWrapper.from_inferred_type(x)
+        y = self.semantic(values).setup(x, scale)(x)
         tmp = x - x.min()
         normed = tmp / tmp.max()
         expected = self.transform(normed, *values)

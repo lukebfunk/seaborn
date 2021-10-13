@@ -52,15 +52,19 @@ class ScaleWrapper:
             return copy(self)
 
     @classmethod
-    def from_inferred_type(cls, var_type: VarType):
+    def from_inferred_type(cls, data: Series) -> ScaleWrapper:
 
+        var_type = variable_type(data)
+        axis = data.name
         if var_type == "numeric":
-            return cls(LinearScale(), "numeric", None)
+            scale = cls(LinearScale(axis), "numeric", None)
         elif var_type == "categorical":
-            return cls(CategoricalScale(), "categorical", None)
+            scale = cls(CategoricalScale(axis), "categorical", None)
         elif var_type == "datetime":
             # TODO add DateTimeNorm that converts to numeric first
-            return cls(DatetimeScale(), "datetime", None)
+            scale = cls(DatetimeScale(axis), "datetime", None)
+        scale.type_declared = False
+        return scale
 
     @property
     def order(self):
@@ -90,7 +94,7 @@ class CategoricalScale(LinearScale):
 
     def __init__(
         self,
-        axis: str | None = None,
+        axis: str,
         order: list | None = None,
         formatter: Any = None
     ):
